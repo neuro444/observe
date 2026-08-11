@@ -14,6 +14,7 @@ code can enforce on its own.
 """
 from __future__ import annotations
 
+import calendar
 import hashlib
 import hmac
 import logging
@@ -21,7 +22,7 @@ import os
 import time
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Optional
 
 import psycopg2
@@ -42,6 +43,10 @@ DATABASE_URL = os.getenv(
     "postgresql://neuroheart:dev_only_change_in_real_deployment@127.0.0.1:5433/cost_ledger",
 )
 ANOMALY_SCAN_HOUR_UTC = int(os.getenv("ANOMALY_SCAN_HOUR_UTC", "6"))
+
+# Phase 1, per the lead: keep this simple — a flat monthly constant, not a
+# fixed-costs table. Revisit if more than just the server needs tracking.
+FIXED_SERVER_COST_MONTHLY_USD = Decimal(os.getenv("FIXED_SERVER_COST_MONTHLY_USD", "28.85"))
 _lookup = PriceBookLookup(DATABASE_URL)
 _scheduler = BackgroundScheduler()
 
@@ -336,6 +341,51 @@ async def run_review_scan(review_date: Optional[date] = None) -> dict[str, Any]:
     target_date = review_date or (datetime.now(timezone.utc).date() - timedelta(days=1))
     inserted = scan_and_record(DATABASE_URL, target_date)
     return {"review_date": target_date.isoformat(), "inserted": inserted}
+
+
+@app.get("/internal/costs/daily")
+async def daily_cost(restaurant_id: int = 1, target_date: Optional[date] = None) -> dict[str, Any]:
+    """Phase 1's actual ask: one basic daily cost total. Variable cost is the
+    real sum of that day's usage_events; fixed cost is the flat monthly
+    server cost prorated to a day. Channel is inferred from call_id — every
+    WhatsApp event this codebase creates uses a "whatsapp-..." call_id (see
+    utils/whatsapp_cost_capture.py); everything else is the phone line."""
+    day = target_date or datetime.now(timezone.utc).date()
+    range_start = day
+    range_end = day + timedelta(days=1)
+
+    with _db() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                CASE WHEN call_id LIKE 'whatsapp-%%' THEN 'whatsapp' ELSE 'phone' END AS channel,
+                COALESCE(SUM(calculated_cost_usd), 0) AS cost_usd
+            FROM usage_events
+            WHERE restaurant_id = %s AND occurred_at >= %s AND occurred_at < %s
+            GROUP BY channel
+            """,
+            (restaurant_id, range_start, range_end),
+        )
+        rows = {row["channel"]: row["cost_usd"] for row in cur.fetchall()}
+
+    phone_cost = rows.get("phone", Decimal("0"))
+    whatsapp_cost = rows.get("whatsapp", Decimal("0"))
+    variable_cost = phone_cost + whatsapp_cost
+
+    days_in_month = calendar.monthrange(day.year, day.month)[1]
+    fixed_cost = (FIXED_SERVER_COST_MONTHLY_USD / Decimal(days_in_month)).quantize(
+        Decimal("0.000001"), rounding=ROUND_HALF_UP
+    )
+
+    return {
+        "date": day.isoformat(),
+        "restaurant_id": restaurant_id,
+        "phone_cost_usd": str(phone_cost),
+        "whatsapp_cost_usd": str(whatsapp_cost),
+        "variable_cost_usd": str(variable_cost),
+        "fixed_cost_usd": str(fixed_cost),
+        "total_cost_usd": str(variable_cost + fixed_cost),
+    }
 
 
 @app.get("/health")
