@@ -16,31 +16,74 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import os
 import time
-from datetime import datetime, timezone
+from contextlib import asynccontextmanager
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Optional
 
 import psycopg2
 import psycopg2.extras
-from fastapi import FastAPI, Request, Response
+from apscheduler.schedulers.background import BackgroundScheduler
+from fastapi import FastAPI, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from cost_engine import PriceBookLookup, RateNotFoundError, calculate_cost
 
-app = FastAPI(title="NeuroHeart Cost API", version="0.1.0")
+from anomalies import scan_and_record
+
+logger = logging.getLogger(__name__)
 
 COST_INGEST_SECRET = os.getenv("COST_INGEST_SECRET", "")
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql://neuroheart:dev_only_change_in_real_deployment@127.0.0.1:5433/cost_ledger",
 )
+ANOMALY_SCAN_HOUR_UTC = int(os.getenv("ANOMALY_SCAN_HOUR_UTC", "6"))
 _lookup = PriceBookLookup(DATABASE_URL)
+_scheduler = BackgroundScheduler()
+
+
+def _run_nightly_scan() -> None:
+    """Scans yesterday's calls — run once a day, always a day after the calls
+    it's reviewing so a call spanning midnight is fully captured first."""
+    review_date = datetime.now(timezone.utc).date() - timedelta(days=1)
+    try:
+        inserted = scan_and_record(DATABASE_URL, review_date)
+        logger.info("nightly anomaly scan for %s: %d new findings", review_date, inserted)
+    except Exception:
+        logger.exception("nightly anomaly scan failed for %s", review_date)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    _scheduler.add_job(_run_nightly_scan, "cron", hour=ANOMALY_SCAN_HOUR_UTC, id="nightly_anomaly_scan")
+    _scheduler.start()
+    yield
+    _scheduler.shutdown(wait=False)
+
+
+app = FastAPI(title="NeuroHeart Cost API", version="0.1.0", lifespan=lifespan)
 
 
 def _db():
     return psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+
+
+def _json_safe(value: Any) -> Any:
+    """Decimal -> str (never float, so a displayed cost never re-introduces the
+    drift the DECIMAL columns exist to avoid) and datetime -> isoformat."""
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return value
+
+
+def _row_json_safe(row: dict[str, Any]) -> dict[str, Any]:
+    return {key: _json_safe(value) for key, value in row.items()}
 
 
 def _parse_signature_header(header: str) -> tuple[Optional[str], Optional[str]]:
@@ -173,6 +216,126 @@ async def ingest(request: Request, response: Response) -> dict[str, Any]:
         conn.commit()
 
     return {"status": "ok", "inserted": inserted, "skipped_duplicates": skipped, "rejected": rejected}
+
+
+@app.get("/internal/calls")
+async def list_calls(
+    restaurant_id: Optional[int] = None,
+    provider: Optional[str] = None,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """Per-call summary for the dashboard's call table: total cost, token
+    totals, average LLM latency. `provider` filters to calls with at least one
+    usage_event from that provider — the Section 4 provider dropdown."""
+    where = []
+    params: list[Any] = []
+    if restaurant_id is not None:
+        where.append("c.restaurant_id = %s")
+        params.append(restaurant_id)
+    if provider is not None:
+        where.append(
+            "EXISTS (SELECT 1 FROM usage_events ue WHERE ue.call_id = c.call_id AND ue.provider = %s)"
+        )
+        params.append(provider)
+    where_clause = f"WHERE {' AND '.join(where)}" if where else ""
+    params.append(limit)
+
+    with _db() as conn, conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT
+                c.call_id, c.restaurant_id, c.started_at, c.ended_at, c.status,
+                COALESCE(SUM(ue.calculated_cost_usd), 0) AS total_cost_usd,
+                COALESCE(SUM(ue.input_tokens), 0) AS total_input_tokens,
+                COALESCE(SUM(ue.output_tokens), 0) AS total_output_tokens,
+                AVG(ue.latency_ms) FILTER (WHERE ue.latency_ms IS NOT NULL) AS avg_latency_ms,
+                ARRAY_AGG(DISTINCT ue.provider) FILTER (WHERE ue.provider IS NOT NULL) AS providers
+            FROM calls c
+            LEFT JOIN usage_events ue ON ue.call_id = c.call_id
+            {where_clause}
+            GROUP BY c.call_id, c.restaurant_id, c.started_at, c.ended_at, c.status
+            ORDER BY c.started_at DESC
+            LIMIT %s
+            """,
+            params,
+        )
+        rows = cur.fetchall()
+
+    return {"calls": [_row_json_safe(dict(row)) for row in rows]}
+
+
+@app.get("/internal/calls/{call_id}")
+async def get_call(call_id: str) -> dict[str, Any]:
+    """Full per-call breakdown: every usage event (stage, provider, model,
+    tokens, latency, cost) plus the summed total — the drill-down behind a row
+    in the calls table."""
+    with _db() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT call_id, restaurant_id, started_at, ended_at, status FROM calls WHERE call_id = %s",
+            (call_id,),
+        )
+        call = cur.fetchone()
+        if call is None:
+            raise HTTPException(status_code=404, detail="call not found")
+
+        cur.execute(
+            """
+            SELECT stage, provider, model, input_tokens, cached_input_tokens,
+                   output_tokens, reasoning_tokens, characters, audio_seconds, billable_minutes,
+                   latency_ms, calculated_cost_usd, occurred_at
+            FROM usage_events
+            WHERE call_id = %s
+            ORDER BY occurred_at
+            """,
+            (call_id,),
+        )
+        events = cur.fetchall()
+
+    total_cost = sum((event["calculated_cost_usd"] for event in events), Decimal("0"))
+    return {
+        "call": _row_json_safe(dict(call)),
+        "events": [_row_json_safe(dict(event)) for event in events],
+        "total_cost_usd": str(total_cost),
+    }
+
+
+@app.get("/internal/reviews")
+async def list_reviews(review_date: Optional[date] = None, status: Optional[str] = None) -> dict[str, Any]:
+    """The end-of-day anomaly table (Section 5): flagged calls for manual
+    review, not an automated alert. Defaults to today."""
+    target_date = review_date or datetime.now(timezone.utc).date()
+    where = ["r.review_date = %s"]
+    params: list[Any] = [target_date]
+    if status is not None:
+        where.append("r.status = %s")
+        params.append(status)
+
+    with _db() as conn, conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT r.id, r.review_date, r.call_id, r.anomaly_reason, r.severity,
+                   r.status, r.reviewer, r.notes, r.created_at,
+                   c.restaurant_id, c.started_at
+            FROM daily_call_reviews r
+            JOIN calls c ON c.call_id = r.call_id
+            WHERE {' AND '.join(where)}
+            ORDER BY r.severity DESC, r.created_at DESC
+            """,
+            params,
+        )
+        rows = cur.fetchall()
+
+    return {"review_date": target_date.isoformat(), "reviews": [_row_json_safe(dict(row)) for row in rows]}
+
+
+@app.post("/internal/reviews/run")
+async def run_review_scan(review_date: Optional[date] = None) -> dict[str, Any]:
+    """Manually trigger the anomaly scan for a given date (defaults to
+    yesterday) — same logic the nightly scheduled job runs, exposed for
+    testing/demo and for catching up a missed run."""
+    target_date = review_date or (datetime.now(timezone.utc).date() - timedelta(days=1))
+    inserted = scan_and_record(DATABASE_URL, target_date)
+    return {"review_date": target_date.isoformat(), "inserted": inserted}
 
 
 @app.get("/health")
