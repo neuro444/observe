@@ -333,6 +333,43 @@ async def list_reviews(review_date: Optional[date] = None, status: Optional[str]
     return {"review_date": target_date.isoformat(), "reviews": [_row_json_safe(dict(row)) for row in rows]}
 
 
+VALID_REVIEW_STATUSES = {"reviewed", "legitimate", "abuse_suspected", "follow_up_required"}
+
+
+class ReviewUpdateIn(BaseModel):
+    status: str
+    reviewer: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@app.patch("/internal/reviews/{review_id}")
+async def update_review(review_id: int, body: ReviewUpdateIn) -> dict[str, Any]:
+    """Close the review workflow: a human marks a flagged call
+    reviewed/legitimate/abuse_suspected. reviewer/notes are optional and
+    never overwrite existing values with blank ones when omitted."""
+    if body.status not in VALID_REVIEW_STATUSES:
+        raise HTTPException(status_code=400, detail=f"status must be one of {sorted(VALID_REVIEW_STATUSES)}")
+
+    with _db() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE daily_call_reviews
+            SET status = %s,
+                reviewer = COALESCE(%s, reviewer),
+                notes = COALESCE(%s, notes)
+            WHERE id = %s
+            RETURNING id, review_date, call_id, anomaly_reason, severity, status, reviewer, notes, created_at
+            """,
+            (body.status, body.reviewer, body.notes, review_id),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="review not found")
+        conn.commit()
+
+    return _row_json_safe(dict(row))
+
+
 @app.post("/internal/reviews/run")
 async def run_review_scan(review_date: Optional[date] = None) -> dict[str, Any]:
     """Manually trigger the anomaly scan for a given date (defaults to
