@@ -34,8 +34,6 @@ infra/
 
 ## What's not built yet (needs infra/access decisions, not just code)
 
-- Actual private GitHub organization + repo — this only exists locally until
-  that's created and this gets pushed there.
 - Phoenix deployment for the observability plane.
 - `cost-dashboard`, `daily-review-worker`.
 - CI/CD, secret scanning, branch protection, CODEOWNERS.
