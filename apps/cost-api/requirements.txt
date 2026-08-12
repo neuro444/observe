@@ -3,4 +3,5 @@ uvicorn[standard]>=0.32
 psycopg2-binary>=2.9
 pydantic>=2.9
 apscheduler>=3.10
+requests>=2.31
 cost-engine @ file://../../packages/cost-engine

@@ -34,6 +34,7 @@ from pydantic import BaseModel, Field
 from cost_engine import PriceBookLookup, RateNotFoundError, calculate_cost
 
 from anomalies import scan_and_record
+from price_check import reconcile_prices
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,8 @@ DATABASE_URL = os.getenv(
     "postgresql://neuroheart:dev_only_change_in_real_deployment@127.0.0.1:5433/cost_ledger",
 )
 ANOMALY_SCAN_HOUR_UTC = int(os.getenv("ANOMALY_SCAN_HOUR_UTC", "6"))
+PRICE_CHECK_DAY_OF_WEEK = os.getenv("PRICE_CHECK_DAY_OF_WEEK", "mon")
+PRICE_CHECK_HOUR_UTC = int(os.getenv("PRICE_CHECK_HOUR_UTC", "5"))
 
 # Phase 1, per the lead: keep this simple — a flat monthly constant, not a
 # fixed-costs table. Revisit if more than just the server needs tracking.
@@ -62,9 +65,21 @@ def _run_nightly_scan() -> None:
         logger.exception("nightly anomaly scan failed for %s", review_date)
 
 
+def _run_weekly_price_check() -> None:
+    try:
+        counts = reconcile_prices(DATABASE_URL)
+        logger.info("weekly price check: %s", counts)
+    except Exception:
+        logger.exception("weekly price check failed")
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     _scheduler.add_job(_run_nightly_scan, "cron", hour=ANOMALY_SCAN_HOUR_UTC, id="nightly_anomaly_scan")
+    _scheduler.add_job(
+        _run_weekly_price_check, "cron",
+        day_of_week=PRICE_CHECK_DAY_OF_WEEK, hour=PRICE_CHECK_HOUR_UTC, id="weekly_price_check",
+    )
     _scheduler.start()
     yield
     _scheduler.shutdown(wait=False)
@@ -423,6 +438,131 @@ async def daily_cost(restaurant_id: int = 1, target_date: Optional[date] = None)
         "fixed_cost_usd": str(fixed_cost),
         "total_cost_usd": str(variable_cost + fixed_cost),
     }
+
+
+@app.post("/internal/prices/reconcile/run")
+async def run_price_check() -> dict[str, Any]:
+    """Manually trigger the weekly price-reconciliation check — same logic
+    the scheduled job runs, exposed for testing/demo and catching up a
+    missed run."""
+    counts = reconcile_prices(DATABASE_URL)
+    return {"result": counts}
+
+
+@app.get("/internal/price-checks")
+async def list_price_checks(limit: int = 50, outcome: Optional[str] = None) -> dict[str, Any]:
+    """Recent price-check history — every rate checked, whether it matched,
+    changed normally, or needs review."""
+    where = []
+    params: list[Any] = []
+    if outcome is not None:
+        where.append("outcome = %s")
+        params.append(outcome)
+    where_clause = f"WHERE {' AND '.join(where)}" if where else ""
+    params.append(limit)
+
+    with _db() as conn, conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT id, provider, model, field, old_value, new_value, outcome, reason, checked_at
+            FROM price_check_runs
+            {where_clause}
+            ORDER BY checked_at DESC
+            LIMIT %s
+            """,
+            params,
+        )
+        rows = cur.fetchall()
+    return {"checks": [_row_json_safe(dict(row)) for row in rows]}
+
+
+@app.get("/internal/price-flags")
+async def list_price_flags(status: str = "pending") -> dict[str, Any]:
+    """Price changes that looked abnormal enough to need a human look,
+    instead of being auto-applied — see price_check.py's threshold logic."""
+    with _db() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT f.id, f.status, f.resolver, f.resolution_notes, f.resolved_at, f.created_at,
+                   r.provider, r.model, r.field, r.old_value, r.new_value, r.reason
+            FROM price_review_flags f
+            JOIN price_check_runs r ON r.id = f.check_run_id
+            WHERE f.status = %s
+            ORDER BY f.created_at DESC
+            """,
+            (status,),
+        )
+        rows = cur.fetchall()
+    return {"flags": [_row_json_safe(dict(row)) for row in rows]}
+
+
+class PriceFlagResolveIn(BaseModel):
+    resolver: str
+    resolution_notes: Optional[str] = None
+    apply_new_value: bool = False
+
+
+@app.patch("/internal/price-flags/{flag_id}")
+async def resolve_price_flag(flag_id: int, body: PriceFlagResolveIn) -> dict[str, Any]:
+    """Close out a flagged price change. `apply_new_value=true` versions
+    price_book with the flagged new value (same effective-dating as an
+    auto-update, just applied by a human instead); false just dismisses the
+    flag (e.g. the old value was actually still correct)."""
+    with _db() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT f.id, f.status, r.provider, r.model, r.field, r.new_value, r.id as check_run_id
+            FROM price_review_flags f JOIN price_check_runs r ON r.id = f.check_run_id
+            WHERE f.id = %s
+            """,
+            (flag_id,),
+        )
+        flag = cur.fetchone()
+        if flag is None:
+            raise HTTPException(status_code=404, detail="flag not found")
+
+        if body.apply_new_value:
+            cur.execute(
+                """
+                SELECT id, provider, model, billing_unit, input_rate, cached_input_rate, output_rate, flat_rate,
+                       pricing_source_url
+                FROM price_book WHERE provider = %s AND model = %s AND effective_to IS NULL
+                """,
+                (flag["provider"], flag["model"]),
+            )
+            row = cur.fetchone()
+            if row is not None:
+                now = datetime.now(timezone.utc)
+                cur.execute("UPDATE price_book SET effective_to = %s WHERE id = %s", (now, row["id"]))
+                new_values = {
+                    "input_rate": row["input_rate"], "cached_input_rate": row["cached_input_rate"],
+                    "output_rate": row["output_rate"], "flat_rate": row["flat_rate"],
+                }
+                new_values[flag["field"]] = flag["new_value"]
+                cur.execute(
+                    """
+                    INSERT INTO price_book (provider, model, billing_unit, input_rate, cached_input_rate,
+                                             output_rate, flat_rate, effective_from, pricing_source_url,
+                                             approval_status, last_verified_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'approved', %s)
+                    """,
+                    (row["provider"], row["model"], row["billing_unit"], new_values["input_rate"],
+                     new_values["cached_input_rate"], new_values["output_rate"], new_values["flat_rate"],
+                     now, row["pricing_source_url"], now),
+                )
+
+        cur.execute(
+            """
+            UPDATE price_review_flags
+            SET status = 'resolved', resolver = %s, resolution_notes = %s, resolved_at = %s
+            WHERE id = %s
+            RETURNING id, status, resolver, resolution_notes, resolved_at
+            """,
+            (body.resolver, body.resolution_notes, datetime.now(timezone.utc), flag_id),
+        )
+        result = cur.fetchone()
+        conn.commit()
+    return _row_json_safe(dict(result))
 
 
 @app.get("/health")
