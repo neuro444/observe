@@ -92,6 +92,43 @@ infra/
   `TRACING_ENABLED` is off in the client repo until turned on for a real
   deployment.
 
+## Environment variables
+
+### `apps/cost-api/.env` (see `apps/cost-api/.env.example`)
+
+| Variable | What it's for |
+|---|---|
+| `DATABASE_URL` | The cost ledger's Postgres connection string. Has a working local default. |
+| `COST_INGEST_SECRET` | **Required.** Shared HMAC secret so the client repo's telemetry adapters can prove they're really the real app when sending usage data in. |
+| `FIXED_SERVER_COST_MONTHLY_USD` | The flat $28.85/month server cost, spread across each day for the Phase 1 daily total. |
+| `ANOMALY_SCAN_HOUR_UTC` | What hour (UTC) the nightly "flag weird calls" scan runs. |
+| `ANOMALY_LONG_CALL_SECONDS` / `ANOMALY_HIGH_TOKENS_PER_MINUTE` / `ANOMALY_HIGH_COST_USD` | The thresholds that make a call count as "unusually long / token-heavy / expensive." |
+| `PRICE_CHECK_DAY_OF_WEEK` / `PRICE_CHECK_HOUR_UTC` | When the weekly price-reconciliation job runs. |
+| `PRICE_CHANGE_THRESHOLD_PERCENT` | Team-confirmed at 30% — below it, a price change auto-applies; above it, a human has to review it. Changing this is a config change now, not a code change. |
+| `NOTIFICATIONS_ENABLED` | Off by default. The on/off switch for price-review alert emails. |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` / `SMTP_USE_TLS` | The mail server used to actually send alert emails (works with any provider — Gmail, company email, etc.). |
+| `SMTP_FROM_EMAIL` | **Required if `NOTIFICATIONS_ENABLED=true`.** The "from" address on alert emails. |
+| `PRICE_REVIEW_NOTIFY_EMAILS` | Comma-separated list of who actually receives the alerts. |
+
+### `observability/phoenix/.env` (see `observability/phoenix/.env.example`)
+
+| Variable | What it's for |
+|---|---|
+| `PHOENIX_DB_PASSWORD` | Password for Phoenix's own, separate Postgres instance (never the cost ledger's). |
+| `PHOENIX_SECRET` | Signs and validates Phoenix's own login tokens/sessions. |
+| `PHOENIX_ADMIN_SECRET` | Doubles as a ready-to-use bearer token for the first admin user — also how the `voice-agent-tracing` system API key (below) was generated, via `createSystemApiKey` over Phoenix's GraphQL API. |
+| `PHOENIX_DEFAULT_ADMIN_INITIAL_PASSWORD` | The initial password for logging into the Phoenix UI as `admin@localhost`. |
+
+### Client repo (`restaurant/voice-ai-ordering-agent`) — tracing settings
+
+Tunables live in `config.py` (this repo's own convention — non-secret settings never go in `.env`); only the real credential goes in `.env`:
+
+| Variable | Where | What it's for |
+|---|---|---|
+| `TRACING_ENABLED` | `config.py` | Off by default. Turns on sending real call traces to Phoenix. |
+| `PHOENIX_COLLECTOR_ENDPOINT` | `config.py` | Where Phoenix is reachable — defaults to `http://127.0.0.1:6006` for local dev. |
+| `PHOENIX_API_KEY` | `.env` (real secret) | The system API key generated for this app (`voice-agent-tracing`), used as the bearer token when sending traces to a Phoenix instance with auth enabled. |
+
 ## What's not built yet
 
 - `cost-dashboard` (the actual UI) — next up.
