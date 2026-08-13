@@ -34,6 +34,8 @@ import psycopg2
 import psycopg2.extras
 import requests
 
+from notify import send_price_review_email
+
 logger = logging.getLogger(__name__)
 
 # 30% — beyond this, flag instead of auto-apply. Confirmed with the team
@@ -190,6 +192,7 @@ def reconcile_prices(dsn: str) -> dict[str, int]:
     price_check_runs entry, and auto-updates always version (never edit in
     place), so re-running never double-applies or loses history."""
     counts = {"unchanged": 0, "auto_updated": 0, "flagged": 0, "check_failed": 0, "not_checkable": 0}
+    new_flags: list[dict[str, object]] = []
 
     with psycopg2.connect(dsn, cursor_factory=psycopg2.extras.RealDictCursor) as conn, conn.cursor() as cur:
         cur.execute(
@@ -248,6 +251,10 @@ def reconcile_prices(dsn: str) -> dict[str, int]:
                         "INSERT INTO price_review_flags (check_run_id) VALUES (%s)",
                         (run_id,),
                     )
+                    new_flags.append({
+                        "provider": row.provider, "model": row.model, "field": field,
+                        "old_value": old_value, "new_value": live_value, "reason": reason,
+                    })
                 elif outcome == "auto_updated":
                     _apply_auto_update(cur, row, field, live_value, now)
 
@@ -255,6 +262,11 @@ def reconcile_prices(dsn: str) -> dict[str, int]:
                 cur.execute("UPDATE price_book SET last_verified_at = %s WHERE id = %s", (now, row.id))
 
         conn.commit()
+
+    # One summary email per run, never one per flag — outside the DB
+    # transaction so a slow/failed send can't hold a lock or roll back real
+    # data; send_price_review_email already swallows its own failures.
+    send_price_review_email(new_flags)
     return counts
 
 
