@@ -35,7 +35,9 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-PRICE_CHANGE_THRESHOLD = Decimal("0.30")  # 30% — beyond this, flag instead of auto-apply
+PRICE_CHANGE_THRESHOLD = Decimal("0.30")  # 30% — beyond this, flag instead of auto-apply.
+# Confirmed with the team (not just an initial guess) — keep this comment in
+# sync if that number is ever revisited.
 _HEADERS = {"User-Agent": "Mozilla/5.0"}
 _TIMEOUT = 15
 
