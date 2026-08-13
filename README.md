@@ -23,7 +23,9 @@ packages/
   cost-engine/           # Pure cost calculation — Decimal arithmetic, price_book lookups
   provider-catalog/      # Known providers/models/units (not yet built)
 observability/
-  phoenix/                # OpenTelemetry + Phoenix self-hosting (not yet configured — infra step)
+  phoenix/                # Self-hosted Phoenix — running, own Postgres, auth enforced.
+                          # Not yet instrumented: bot.py/whatsapp_agent.py don't send it
+                          # any trace data yet, so it's live but empty.
 infra/
   docker/                # docker-compose for local Postgres (+ Phoenix later)
   migrations/            # SQL schema migrations
@@ -45,20 +47,45 @@ infra/
     in-process scheduler.
   - `GET /internal/costs/daily` — Phase 1's basic daily cost total (phone +
     WhatsApp + a flat prorated server cost), per the lead's simplified ask.
+  - `GET /internal/price-checks`, `GET /internal/price-flags`,
+    `PATCH /internal/price-flags/{id}`, `POST /internal/prices/reconcile/run`
+    — the weekly price-reconciliation job. Checks each vendor's real public
+    pricing page (no API key needed — this is published information, not our
+    private billing data), auto-applies a normal-looking change, flags
+    anything bigger than `PRICE_CHANGE_THRESHOLD_PERCENT` (30%, team-confirmed)
+    or unreadable for a human instead of silently applying it. Plivo's
+    WhatsApp rate is explicitly `not_checkable` — Meta prices it by message
+    category/country, not a stable public number.
+  - Email notifications (`notify.py`) when a price gets flagged — off by
+    default (`NOTIFICATIONS_ENABLED`), recipients configurable via
+    `PRICE_REVIEW_NOTIFY_EMAILS`.
 - Both channels in the client repo now report real usage: the phone line
   (`plivo_agent/cost_capture.py`) and WhatsApp
   (`utils/whatsapp_cost_capture.py`, added once we found WhatsApp's actual
   OpenAI call site is `utils/whatsapp_agent.py`, not `utils/brain.py`).
+- Both channels also have a `tiktoken` fallback for when the provider doesn't
+  report real token usage (`token_source` becomes `tiktoken_estimate`) —
+  the phone line's uses `session.transcript_turns` (already captured by
+  `bot.py` for the staff dashboard) rather than adding new capture logic to
+  the live call pipeline.
+- Self-hosted Phoenix (`observability/phoenix/`) — running, own Postgres,
+  authentication enforced. Not yet fed any real trace data.
 
-## What's not built yet (needs infra/access decisions, not just code)
+## Setup still needed (not code — config/access)
 
-- Phoenix deployment for the observability plane — still an open decision
-  with the lead, not just a build task.
+- **Email notifications**: code is done and tested, but not actually live —
+  needs a real Gmail app password
+  ([myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords))
+  filled into `apps/cost-api/.env`'s `SMTP_USERNAME` / `SMTP_PASSWORD` /
+  `SMTP_FROM_EMAIL`, then `NOTIFICATIONS_ENABLED=true`. Currently off.
+- Weekly price check hasn't run on its real automatic schedule yet — only
+  tested via manual trigger so far.
+- Phoenix needs `plivo_agent/bot.py` and `utils/whatsapp_agent.py`
+  instrumented with OpenTelemetry before it has anything real to show.
+
+## What's not built yet
+
 - `cost-dashboard` (the actual UI) — next up.
-- A `tiktoken`-based fallback for when a provider doesn't report token usage
-  (`token_source` is currently always `provider_reported`).
-- Weekly reconciliation against real vendor invoices — blocked on getting an
-  OpenAI Admin-tier API key.
 - CI/CD, secret scanning, branch protection, CODEOWNERS.
 
 ## Client-repo side
