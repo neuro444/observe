@@ -23,6 +23,7 @@ Plivo WhatsApp have known limitations, documented on each function.
 from __future__ import annotations
 
 import logging
+import os
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -35,9 +36,11 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-PRICE_CHANGE_THRESHOLD = Decimal("0.30")  # 30% — beyond this, flag instead of auto-apply.
-# Confirmed with the team (not just an initial guess) — keep this comment in
-# sync if that number is ever revisited.
+# 30% — beyond this, flag instead of auto-apply. Confirmed with the team
+# (not just an initial guess). Configurable via env so changing it later is
+# a config change, not a code change — set PRICE_CHANGE_THRESHOLD_PERCENT
+# to a whole-number percent, e.g. 20 for 20%.
+PRICE_CHANGE_THRESHOLD = Decimal(os.getenv("PRICE_CHANGE_THRESHOLD_PERCENT", "30")) / Decimal("100")
 _HEADERS = {"User-Agent": "Mozilla/5.0"}
 _TIMEOUT = 15
 
