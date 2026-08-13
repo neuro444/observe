@@ -1,0 +1,42 @@
+# Self-hosted Arize Phoenix, per the plan's Section 8 ("Deploy Phoenix with
+# authentication and PostgreSQL") and Section 2 ("two separate data planes").
+#
+# Deliberately its own Postgres instance, NOT the cost_ledger database used
+# by apps/cost-api — Phoenix is the observability plane (traces, timings,
+# spans), never the authoritative billing source. Mixing the two would
+# violate the exact separation the plan calls for.
+#
+# Run: docker compose up -d   (from this directory)
+# UI:  http://localhost:6006
+
+services:
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    depends_on:
+      - phoenix-db
+    ports:
+      - "127.0.0.1:6006:6006"  # UI + OTLP HTTP collector — loopback only, not publicly exposed
+      - "127.0.0.1:4317:4317"  # OTLP gRPC collector — same
+    environment:
+      PHOENIX_SQL_DATABASE_URL: postgresql://phoenix:${PHOENIX_DB_PASSWORD}@phoenix-db:5432/phoenix
+      PHOENIX_ENABLE_AUTH: "true"
+      PHOENIX_SECRET: ${PHOENIX_SECRET}
+      PHOENIX_ADMIN_SECRET: ${PHOENIX_ADMIN_SECRET}
+      PHOENIX_DEFAULT_ADMIN_INITIAL_PASSWORD: ${PHOENIX_DEFAULT_ADMIN_INITIAL_PASSWORD}
+    restart: unless-stopped
+
+  phoenix-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: phoenix
+      POSTGRES_PASSWORD: ${PHOENIX_DB_PASSWORD}
+      POSTGRES_DB: phoenix
+    ports:
+      - "127.0.0.1:5434:5432"  # different host port than cost_ledger's 5433 — no collision
+    volumes:
+      - phoenix_db_data:/var/lib/postgresql/data
+
+volumes:
+  phoenix_db_data:
+    driver: local
