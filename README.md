@@ -69,7 +69,15 @@ infra/
   `bot.py` for the staff dashboard) rather than adding new capture logic to
   the live call pipeline.
 - Self-hosted Phoenix (`observability/phoenix/`) — running, own Postgres,
-  authentication enforced. Not yet fed any real trace data.
+  authentication enforced. Both the phone line (`plivo_agent/server.py`) and
+  WhatsApp (`main.py`) are now instrumented with OpenTelemetry
+  (`utils/tracing.py` in the client repo) — off by default
+  (`TRACING_ENABLED`). Verified with a real span end to end (correct model,
+  tokens, latency, real content) against the running Phoenix instance; the
+  phone line's coverage is via the same instrumented `openai` SDK class
+  Pipecat's `OpenAILLMService` wraps internally (confirmed by reading
+  Pipecat's source, not assumed) rather than a separately live-tested phone
+  call, since that needs real telephony infra this environment doesn't have.
 
 ## Setup still needed (not code — config/access)
 
@@ -80,8 +88,9 @@ infra/
   `SMTP_FROM_EMAIL`, then `NOTIFICATIONS_ENABLED=true`. Currently off.
 - Weekly price check hasn't run on its real automatic schedule yet — only
   tested via manual trigger so far.
-- Phoenix needs `plivo_agent/bot.py` and `utils/whatsapp_agent.py`
-  instrumented with OpenTelemetry before it has anything real to show.
+- Phoenix has real, working instrumentation but no real trace data yet —
+  `TRACING_ENABLED` is off in the client repo until turned on for a real
+  deployment.
 
 ## What's not built yet
 
