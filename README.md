@@ -24,11 +24,13 @@ packages/
   provider-catalog/      # Known providers/models/units (not yet built)
 observability/
   phoenix/                # Self-hosted Phoenix — running, own Postgres, auth enforced.
-                          # Not yet instrumented: bot.py/whatsapp_agent.py don't send it
-                          # any trace data yet, so it's live but empty.
+                          # Both the phone line and WhatsApp are instrumented and send
+                          # it real traces (client repo's utils/tracing.py), off by
+                          # default via TRACING_ENABLED.
 infra/
   docker/                # docker-compose for local Postgres (+ Phoenix later)
-  migrations/            # SQL schema migrations
+  migrations/            # SQL schema migrations, plus run_migrations.py — the runner
+                          # CI (and local dev) uses to build the schema from scratch
 ```
 
 ## What's actually running today
@@ -129,10 +131,33 @@ Tunables live in `config.py` (this repo's own convention — non-secret settings
 | `PHOENIX_COLLECTOR_ENDPOINT` | `config.py` | Where Phoenix is reachable — defaults to `http://127.0.0.1:6006` for local dev. |
 | `PHOENIX_API_KEY` | `.env` (real secret) | The system API key generated for this app (`voice-agent-tracing`), used as the bearer token when sending traces to a Phoenix instance with auth enabled. |
 
+## Testing and CI
+
+`.github/workflows/ci.yml` runs on every push/PR: a syntax-error-only lint
+pass, then a real test job against a Postgres service container (migrations
+applied via `infra/migrations/run_migrations.py`, then the full suite).
+
+66 tests total, covering what previously had zero automated coverage:
+- `packages/cost-engine/tests/` — every cost formula, Decimal math, cached-token
+  discounting.
+- `apps/cost-api/tests/test_anomalies.py` — every anomaly threshold boundary.
+- `apps/cost-api/tests/test_notify.py` — email content and every guard clause.
+- `apps/cost-api/tests/test_price_check_parsers.py` — every vendor parser, run
+  against real fixture snippets captured from each pricing page (not synthetic
+  HTML) — see `tests/fixtures/`. The live-fetch behavior itself (`_fetch`) is
+  intentionally not covered here; CI never depends on real network access to
+  external vendor pages.
+- `apps/cost-api/tests/test_ingestion.py` — real Postgres integration tests
+  (signing, idempotency, cost calculation, rejection paths).
+
+Run locally: `pip install -e packages/cost-engine && pip install -r
+apps/cost-api/requirements-dev.txt`, then `pytest packages/cost-engine/tests
+apps/cost-api/tests` against a Postgres with migrations applied.
+
 ## What's not built yet
 
 - `cost-dashboard` (the actual UI) — next up.
-- CI/CD, secret scanning, branch protection, CODEOWNERS.
+- Secret scanning, branch protection, CODEOWNERS.
 
 ## Client-repo side
 

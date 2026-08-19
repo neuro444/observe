@@ -4,4 +4,8 @@ psycopg2-binary>=2.9
 pydantic>=2.9
 apscheduler>=3.10
 requests>=2.31
-cost-engine @ file://../../packages/cost-engine
+
+# cost-engine is a local workspace package, not installable from this file
+# alone (a relative path here doesn't resolve reliably across different
+# working directories/pip versions). Install it explicitly, from the repo
+# root: pip install -e packages/cost-engine

@@ -1,0 +1,7 @@
+-r requirements.txt
+
+pytest>=8.0
+httpx>=0.27
+
+# Also run: pip install -e ../../packages/cost-engine (from apps/cost-api/)
+# or: pip install -e packages/cost-engine (from the repo root)
