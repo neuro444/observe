@@ -130,6 +130,13 @@ proven end to end against real code in both new repos:
 - The telephony poll is a real scheduled job now, but it's off until
   `TELEPHONY_URL` points at somewhere real — needs `telephony` deployed
   somewhere reachable first (currently only ever run locally).
+- **Confirmed real gap, 2026-08-25**: `telephony` is genuinely deployed and
+  healthy at `https://voice.neuroheart.ai` (`/health` → 200), but nginx
+  there only routes `/voice/*` and `/audio/*` — `/cost/calls` (and
+  `/orders/recent`) hit nginx's own 404, never reach the app. Setting
+  `TELEPHONY_URL` to that host won't actually work until an nginx location
+  block for `/cost/*` is added on the server — a deploy/access task, not
+  code, and not something this repo can fix on its own.
 
 ## Environment variables
 
