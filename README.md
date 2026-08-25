@@ -81,6 +81,31 @@ infra/
   Pipecat's source, not assumed) rather than a separately live-tested phone
   call, since that needs real telephony infra this environment doesn't have.
 
+## chat_manager / telephony integration (new)
+
+The client side is being rebuilt as two separate repos (`chat_manager`,
+`telephony`) — the old `restaurant` repo's phone/WhatsApp code is frozen.
+This platform's pricing engine, ingestion API, and schema needed **zero
+changes** to support the new architecture — same endpoint, same price_book,
+proven end to end against real code in both new repos:
+
+- `price_book` gained one new row: `elevenlabs / eleven_turbo_v2_5`
+  (the new system's actual TTS model, confirmed same $0.05/1k-character
+  rate as the existing `eleven_flash_v2` row on ElevenLabs' real pricing
+  page — `infra/migrations/008_add_eleven_turbo_v2_5.sql`).
+- `apps/cost-api/scripts/simulate_chat_manager_integration.py` — proves the
+  real `/chat` response shape (tokens, tts_chars) plus a real Plivo hangup
+  duration price correctly through the existing endpoint.
+- `apps/cost-api/scripts/poll_telephony_cost_events.py` — the actual
+  integration: polls `telephony`'s `GET /cost/calls` and forwards every
+  record into `/internal/cost-events`. Handles both record types that
+  endpoint returns — `call_ended` (Plivo minutes) and `llm_turn`
+  (chat_manager's per-turn tokens/tts_chars, forwarded by `telephony` since
+  2026-08-25, on its own `roshni-work-cost-monitoring` branch pending
+  Rakshitha's review — see that repo). Verified end to end against real,
+  live instances of both services — genuine Plivo-signed requests, real
+  cost calculated for every stage.
+
 ## Setup still needed (not code — config/access)
 
 - **Email notifications**: code is done and tested, but not actually live —
@@ -93,6 +118,11 @@ infra/
 - Phoenix has real, working instrumentation but no real trace data yet —
   `TRACING_ENABLED` is off in the client repo until turned on for a real
   deployment.
+- `telephony`'s LLM/TTS-forwarding change is on a branch, awaiting
+  Rakshitha's review before merging.
+- `poll_telephony_cost_events.py` isn't scheduled anywhere yet — needs
+  `telephony` deployed somewhere reachable first (currently only ever run
+  locally), then a real run interval decided.
 
 ## Environment variables
 
