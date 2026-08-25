@@ -35,6 +35,7 @@ from cost_engine import PriceBookLookup, RateNotFoundError, calculate_cost
 
 from anomalies import scan_and_record
 from price_check import reconcile_prices
+from telephony_poller import poll_once as poll_telephony_once
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,13 @@ DATABASE_URL = os.getenv(
 ANOMALY_SCAN_HOUR_UTC = int(os.getenv("ANOMALY_SCAN_HOUR_UTC", "6"))
 PRICE_CHECK_DAY_OF_WEEK = os.getenv("PRICE_CHECK_DAY_OF_WEEK", "mon")
 PRICE_CHECK_HOUR_UTC = int(os.getenv("PRICE_CHECK_HOUR_UTC", "5"))
+
+# Off by default -- same fail-safe pattern as NOTIFICATIONS_ENABLED/TRACING_ENABLED
+# elsewhere in this platform. Empty until telephony is deployed somewhere reachable;
+# the job below simply never runs until this is set to a real URL.
+TELEPHONY_URL = os.getenv("TELEPHONY_URL", "").strip()
+TELEPHONY_POLL_INTERVAL_SECONDS = int(os.getenv("TELEPHONY_POLL_INTERVAL_SECONDS", "60"))
+COST_API_SELF_URL = os.getenv("COST_API_SELF_URL", "http://127.0.0.1:8000")
 
 # Phase 1, per the lead: keep this simple — a flat monthly constant, not a
 # fixed-costs table. Revisit if more than just the server needs tracking.
@@ -73,6 +81,16 @@ def _run_weekly_price_check() -> None:
         logger.exception("weekly price check failed")
 
 
+def _run_telephony_poll() -> None:
+    try:
+        result = poll_telephony_once(
+            telephony_url=TELEPHONY_URL, cost_api_url=COST_API_SELF_URL, secret=COST_INGEST_SECRET,
+        )
+        logger.info("telephony cost poll: %s", result)
+    except Exception:
+        logger.exception("telephony cost poll failed")
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     _scheduler.add_job(_run_nightly_scan, "cron", hour=ANOMALY_SCAN_HOUR_UTC, id="nightly_anomaly_scan")
@@ -80,6 +98,11 @@ async def lifespan(_app: FastAPI):
         _run_weekly_price_check, "cron",
         day_of_week=PRICE_CHECK_DAY_OF_WEEK, hour=PRICE_CHECK_HOUR_UTC, id="weekly_price_check",
     )
+    if TELEPHONY_URL:
+        _scheduler.add_job(
+            _run_telephony_poll, "interval",
+            seconds=TELEPHONY_POLL_INTERVAL_SECONDS, id="telephony_cost_poll",
+        )
     _scheduler.start()
     yield
     _scheduler.shutdown(wait=False)

@@ -96,15 +96,22 @@ proven end to end against real code in both new repos:
 - `apps/cost-api/scripts/simulate_chat_manager_integration.py` — proves the
   real `/chat` response shape (tokens, tts_chars) plus a real Plivo hangup
   duration price correctly through the existing endpoint.
-- `apps/cost-api/scripts/poll_telephony_cost_events.py` — the actual
-  integration: polls `telephony`'s `GET /cost/calls` and forwards every
-  record into `/internal/cost-events`. Handles both record types that
+- The actual integration: polls `telephony`'s `GET /cost/calls` and forwards
+  every record into `/internal/cost-events`. Handles both record types that
   endpoint returns — `call_ended` (Plivo minutes) and `llm_turn`
   (chat_manager's per-turn tokens/tts_chars, forwarded by `telephony` since
   2026-08-25, on its own `roshni-work-cost-monitoring` branch pending
   Rakshitha's review — see that repo). Verified end to end against real,
   live instances of both services — genuine Plivo-signed requests, real
   cost calculated for every stage.
+  - Shared logic lives in `apps/cost-api/app/telephony_poller.py`, used by
+    both a real **scheduled job** inside `cost-api` (off by default —
+    starts running automatically the moment `TELEPHONY_URL` is set to a
+    real address, same in-process scheduler as the anomaly scan and price
+    check) and `scripts/poll_telephony_cost_events.py` (manual/debugging
+    entry point, same logic). Verified the scheduler itself actually fires
+    on its own — generated real telephony data, touched nothing, watched
+    it get polled and priced automatically within the configured interval.
 
 ## Setup still needed (not code — config/access)
 
@@ -120,9 +127,9 @@ proven end to end against real code in both new repos:
   deployment.
 - `telephony`'s LLM/TTS-forwarding change is on a branch, awaiting
   Rakshitha's review before merging.
-- `poll_telephony_cost_events.py` isn't scheduled anywhere yet — needs
-  `telephony` deployed somewhere reachable first (currently only ever run
-  locally), then a real run interval decided.
+- The telephony poll is a real scheduled job now, but it's off until
+  `TELEPHONY_URL` points at somewhere real — needs `telephony` deployed
+  somewhere reachable first (currently only ever run locally).
 
 ## Environment variables
 
@@ -141,6 +148,9 @@ proven end to end against real code in both new repos:
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` / `SMTP_USE_TLS` | The mail server used to actually send alert emails (works with any provider — Gmail, company email, etc.). |
 | `SMTP_FROM_EMAIL` | **Required if `NOTIFICATIONS_ENABLED=true`.** The "from" address on alert emails. |
 | `PRICE_REVIEW_NOTIFY_EMAILS` | Comma-separated list of who actually receives the alerts. |
+| `TELEPHONY_URL` | Empty by default — the telephony cost poll never runs until this is set to a real, reachable `telephony` URL. |
+| `TELEPHONY_POLL_INTERVAL_SECONDS` | How often the poll runs once `TELEPHONY_URL` is set. Defaults to 60s. |
+| `COST_API_SELF_URL` | Where this service reaches itself to forward polled events through the same `/internal/cost-events` path everyone else uses. Defaults to `http://127.0.0.1:8000`. |
 
 ### `observability/phoenix/.env` (see `observability/phoenix/.env.example`)
 
