@@ -54,6 +54,10 @@ PRICE_CHECK_HOUR_UTC = int(os.getenv("PRICE_CHECK_HOUR_UTC", "5"))
 TELEPHONY_URL = os.getenv("TELEPHONY_URL", "").strip()
 TELEPHONY_POLL_INTERVAL_SECONDS = int(os.getenv("TELEPHONY_POLL_INTERVAL_SECONDS", "60"))
 COST_API_SELF_URL = os.getenv("COST_API_SELF_URL", "http://127.0.0.1:8000")
+# telephony's dashboard feeds (/cost/calls included) require this as X-API-Key --
+# must match telephony's own DASHBOARD_API_KEY, deliberately a separate secret
+# from COST_INGEST_SECRET (see telephony_poller.py).
+TELEPHONY_API_KEY = os.getenv("TELEPHONY_API_KEY", "").strip()
 
 # Phase 1, per the lead: keep this simple — a flat monthly constant, not a
 # fixed-costs table. Revisit if more than just the server needs tracking.
@@ -85,6 +89,7 @@ def _run_telephony_poll() -> None:
     try:
         result = poll_telephony_once(
             telephony_url=TELEPHONY_URL, cost_api_url=COST_API_SELF_URL, secret=COST_INGEST_SECRET,
+            telephony_api_key=TELEPHONY_API_KEY,
         )
         logger.info("telephony cost poll: %s", result)
     except Exception:

@@ -1,6 +1,13 @@
 """Polls telephony's GET /cost/calls and forwards every cost-relevant
 record into this same service's own /internal/cost-events endpoint.
 
+telephony's dashboard feeds (including /cost/calls) require an X-API-Key
+matching its own DASHBOARD_API_KEY -- TELEPHONY_API_KEY here is that same
+value, sent on every poll. Deliberately a distinct secret from
+COST_INGEST_SECRET: one authenticates us to telephony, the other
+authenticates telephony's data to us -- conflating them would mean a
+compromise of either side compromises both directions.
+
 Shared by two callers so there's one source of truth:
   - main.py's scheduled job (the real, ongoing path once telephony is
     deployed somewhere reachable).
@@ -42,8 +49,11 @@ def sign(body: bytes, secret: str) -> str:
     return f"t={ts},v0={digest}"
 
 
-def fetch_telephony_calls(telephony_url: str, limit: int = 50) -> list[dict]:
-    r = requests.get(f"{telephony_url}/cost/calls", params={"limit": limit}, timeout=10)
+def fetch_telephony_calls(telephony_url: str, limit: int = 50, *, api_key: str = "") -> list[dict]:
+    headers = {"X-API-Key": api_key} if api_key else {}
+    r = requests.get(
+        f"{telephony_url}/cost/calls", params={"limit": limit}, headers=headers, timeout=10
+    )
     r.raise_for_status()
     return r.json().get("calls", [])
 
@@ -119,9 +129,9 @@ def ingest(events: list[dict], *, cost_api_url: str, secret: str) -> dict:
     return r.json()
 
 
-def poll_once(*, telephony_url: str, cost_api_url: str, secret: str) -> dict:
+def poll_once(*, telephony_url: str, cost_api_url: str, secret: str, telephony_api_key: str = "") -> dict:
     """Returns a small summary dict -- callers log it however fits their context."""
-    records = fetch_telephony_calls(telephony_url)
+    records = fetch_telephony_calls(telephony_url, api_key=telephony_api_key)
     events = [e for r in records for e in build_events(r)]
     if not events:
         return {"records_seen": len(records), "events_forwarded": 0}
