@@ -12,6 +12,7 @@ import hashlib
 import hmac
 import json
 import time
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 SECRET = "test-secret-do-not-use-in-prod"
@@ -68,6 +69,87 @@ def test_valid_request_creates_parent_call_row(client, db_connection):
         cur.execute("SELECT status FROM calls WHERE call_id = 'pytest-call-2'")
         row = cur.fetchone()
     assert row is not None
+
+
+def test_call_end_completes_call_and_preserves_duration(client, db_connection):
+    ended_at = "2026-08-29T02:57:14.919619+00:00"
+    event = make_event(
+        "pytest-call-ended-voice",
+        "pytest-call-ended",
+        stage="telephony",
+        provider="plivo",
+        model="voice",
+        billing_unit="minute",
+        input_tokens=0,
+        output_tokens=0,
+        quantity="1.1",
+        occurred_at=ended_at,
+        call_ended_at=ended_at,
+        call_duration_seconds="65",
+    )
+
+    response = post_events(client, [event])
+    assert response.json()["inserted"] == 1
+
+    with db_connection.cursor() as cur:
+        cur.execute(
+            """
+            SELECT started_at, ended_at, total_duration_s, status
+            FROM calls WHERE call_id = 'pytest-call-ended'
+            """
+        )
+        started_at, stored_ended_at, duration, status = cur.fetchone()
+
+    expected_end = datetime.fromisoformat(ended_at)
+    assert stored_ended_at == expected_end
+    assert started_at == expected_end - timedelta(seconds=65)
+    assert duration == Decimal("65")
+    assert status == "completed"
+
+
+def test_duplicate_call_end_repairs_legacy_call_without_double_cost(client, db_connection):
+    event_id = "pytest-legacy-ended-voice"
+    call_id = "pytest-legacy-ended"
+    ended_at = "2026-08-29T02:57:14.919619+00:00"
+    legacy = make_event(
+        event_id,
+        call_id,
+        stage="telephony",
+        provider="plivo",
+        model="voice",
+        billing_unit="minute",
+        input_tokens=0,
+        output_tokens=0,
+        quantity="1.1",
+        occurred_at=ended_at,
+    )
+    assert post_events(client, [legacy]).json()["inserted"] == 1
+
+    repaired = {
+        **legacy,
+        "call_ended_at": ended_at,
+        "call_duration_seconds": "65",
+    }
+    response = post_events(client, [repaired])
+    assert response.json()["inserted"] == 0
+    assert response.json()["skipped_duplicates"] == 1
+
+    with db_connection.cursor() as cur:
+        cur.execute(
+            """
+            SELECT ended_at, total_duration_s, status
+            FROM calls WHERE call_id = %s
+            """,
+            (call_id,),
+        )
+        stored_ended_at, duration, status = cur.fetchone()
+        cur.execute("SELECT count(*) FROM usage_events WHERE call_id = %s", (call_id,))
+        event_count = cur.fetchone()[0]
+
+    assert stored_ended_at == datetime.fromisoformat(ended_at)
+    assert duration == Decimal("65")
+    assert status == "completed"
+    assert event_count == 1
 
 
 def test_duplicate_event_id_is_skipped_not_double_inserted(client):

@@ -37,6 +37,7 @@ import json
 import logging
 import time
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 
 import requests
 
@@ -66,10 +67,21 @@ def build_events(record: dict) -> list[dict]:
     occurred_at = record.get("emitted_at") or now
 
     if kind == "call_ended":
-        duration = record.get("duration_seconds")
+        duration_raw = record.get("duration_seconds")
         call_uuid = record.get("call_uuid")
-        if not duration or not call_uuid:
+        try:
+            duration = Decimal(str(duration_raw))
+        except (InvalidOperation, TypeError, ValueError):
             return []
+        if duration <= 0 or not call_uuid:
+            return []
+        bill_duration_raw = record.get("bill_duration_seconds")
+        try:
+            bill_duration = Decimal(str(bill_duration_raw))
+        except (InvalidOperation, TypeError, ValueError):
+            bill_duration = duration
+        if bill_duration <= 0:
+            bill_duration = duration
         return [{
             "event_id": f"{call_uuid}-voice",
             "call_id": call_uuid,
@@ -78,7 +90,13 @@ def build_events(record: dict) -> list[dict]:
             "provider": "plivo",
             "model": "voice",
             "billing_unit": "minute",
-            "quantity": str(round(duration / 60, 2)),
+            # Provider cost follows billed time; call lifecycle follows the
+            # actual connected duration. Keeping both prevents final TTS
+            # playback/silence from being lost or billing increments from
+            # distorting the conversational timeline.
+            "quantity": str(bill_duration / Decimal("60")),
+            "call_ended_at": occurred_at,
+            "call_duration_seconds": str(duration),
             "occurred_at": occurred_at,
         }]
 

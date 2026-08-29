@@ -112,6 +112,11 @@ proven end to end against real code in both new repos:
     entry point, same logic). Verified the scheduler itself actually fires
     on its own — generated real telephony data, touched nothing, watched
     it get polled and priced automatically within the configured interval.
+  - Completed calls keep Plivo's connected `Duration` separate from
+    `BillDuration`: connected duration determines `started_at`, `ended_at`,
+    and `total_duration_s`, while billed duration determines Plivo cost.
+    Re-polling a legacy `call_ended` event repairs an `in_progress` parent
+    call without inserting or charging the usage event twice.
 
 ## Setup still needed (not code — config/access)
 

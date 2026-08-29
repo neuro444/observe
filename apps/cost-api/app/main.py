@@ -184,11 +184,63 @@ class UsageEventIn(BaseModel):
     latency_ms: Optional[int] = None
     token_source: str = "provider_reported"  # provider_reported | tiktoken_estimate
     had_empty_response: bool = False
+    # Optional call-lifecycle facts. Telephony's call_ended record supplies
+    # these; token/TTS events intentionally leave them unset.
+    call_ended_at: Optional[datetime] = None
+    call_duration_seconds: Optional[Decimal] = Field(default=None, ge=0)
     occurred_at: datetime
 
 
 class UsageEventBatch(BaseModel):
     events: list[UsageEventIn] = Field(default_factory=list)
+
+
+def _upsert_call(cur, event: UsageEventIn) -> None:
+    """Keep the parent call's lifecycle correct regardless of event order.
+
+    Telephony returns newest records first, so call_ended commonly reaches
+    this API before the earlier LLM/TTS turns. A duplicate call_ended event
+    must also repair rows created by older deployments without charging the
+    usage event twice.
+    """
+    ended_at = event.call_ended_at
+    duration = event.call_duration_seconds if ended_at is not None else None
+    started_at = event.occurred_at
+    status = "in_progress"
+    if ended_at is not None:
+        status = "completed"
+        if duration is not None:
+            started_at = ended_at - timedelta(seconds=float(duration))
+
+    cur.execute(
+        """
+        INSERT INTO calls (
+            call_id, restaurant_id, started_at, ended_at, total_duration_s, status
+        ) VALUES (%s, %s, %s, %s, %s, %s)
+        ON CONFLICT (call_id) DO UPDATE SET
+            started_at = LEAST(calls.started_at, EXCLUDED.started_at),
+            ended_at = CASE
+                WHEN EXCLUDED.ended_at IS NULL THEN calls.ended_at
+                WHEN calls.ended_at IS NULL THEN EXCLUDED.ended_at
+                ELSE GREATEST(calls.ended_at, EXCLUDED.ended_at)
+            END,
+            total_duration_s = COALESCE(
+                EXCLUDED.total_duration_s, calls.total_duration_s
+            ),
+            status = CASE
+                WHEN EXCLUDED.status = 'completed' THEN 'completed'
+                ELSE calls.status
+            END
+        """,
+        (
+            event.call_id,
+            event.restaurant_id,
+            started_at,
+            ended_at,
+            duration,
+            status,
+        ),
+    )
 
 
 @app.post("/internal/cost-events")
@@ -208,6 +260,11 @@ async def ingest(request: Request, response: Response) -> dict[str, Any]:
         for event in batch.events:
             cur.execute("SELECT 1 FROM usage_events WHERE event_id = %s", (event.event_id,))
             if cur.fetchone():
+                # Re-polled call_ended records repair lifecycle metadata from
+                # deployments that ingested the cost before these fields
+                # existed, while the usage event itself remains deduplicated.
+                if event.call_ended_at is not None:
+                    _upsert_call(cur, event)
                 skipped += 1
                 continue
 
@@ -229,16 +286,7 @@ async def ingest(request: Request, response: Response) -> dict[str, Any]:
                 rejected.append({"event_id": event.event_id, "reason": str(exc)})
                 continue
 
-            # Ensure the parent call row exists (FK) without clobbering it if
-            # a later event for the same call already created it.
-            cur.execute(
-                """
-                INSERT INTO calls (call_id, restaurant_id, started_at, status)
-                VALUES (%s, %s, %s, 'in_progress')
-                ON CONFLICT (call_id) DO NOTHING
-                """,
-                (event.call_id, event.restaurant_id, event.occurred_at),
-            )
+            _upsert_call(cur, event)
 
             cur.execute(
                 """
