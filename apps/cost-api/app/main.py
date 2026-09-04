@@ -318,11 +318,17 @@ async def ingest(request: Request, response: Response) -> dict[str, Any]:
 async def list_calls(
     restaurant_id: Optional[int] = None,
     provider: Optional[str] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
     limit: int = 50,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Per-call summary for the dashboard's call table: total cost, token
     totals, average LLM latency. `provider` filters to calls with at least one
-    usage_event from that provider — the Section 4 provider dropdown."""
+    usage_event from that provider — the Section 4 provider dropdown.
+    `start_date`/`end_date` filter on c.started_at, inclusive on both ends
+    (calendar-day granularity, UTC — same semantics as /internal/costs/daily).
+    `offset` supports paging past `limit` for wide date ranges."""
     where = []
     params: list[Any] = []
     if restaurant_id is not None:
@@ -333,8 +339,14 @@ async def list_calls(
             "EXISTS (SELECT 1 FROM usage_events ue WHERE ue.call_id = c.call_id AND ue.provider = %s)"
         )
         params.append(provider)
+    if start_date is not None:
+        where.append("c.started_at >= %s")
+        params.append(start_date)
+    if end_date is not None:
+        where.append("c.started_at < %s")
+        params.append(end_date + timedelta(days=1))
     where_clause = f"WHERE {' AND '.join(where)}" if where else ""
-    params.append(limit)
+    params.extend([limit, offset])
 
     with _db() as conn, conn.cursor() as cur:
         cur.execute(
@@ -351,7 +363,7 @@ async def list_calls(
             {where_clause}
             GROUP BY c.call_id, c.restaurant_id, c.started_at, c.ended_at, c.status
             ORDER BY c.started_at DESC
-            LIMIT %s
+            LIMIT %s OFFSET %s
             """,
             params,
         )
@@ -522,6 +534,148 @@ async def daily_cost(
         "variable_cost_usd": str(variable_cost),
         "fixed_cost_usd": str(fixed_cost),
         "total_cost_usd": str(variable_cost + fixed_cost),
+    }
+
+
+_BREAKDOWN_PROVIDERS = ("openai", "elevenlabs", "plivo")
+_TRUNC_UNIT = {"day": "day", "month": "month", "year": "year"}
+
+
+def _daily_fixed_cost(day: date) -> Decimal:
+    """Exactly daily_cost()'s proration: monthly cost / days in that day's
+    calendar month. Not a flat monthly/30 -- a 31-day month prorates lower
+    per day than a 28-day one, same as the per-day endpoint already does."""
+    days_in_month = calendar.monthrange(day.year, day.month)[1]
+    return FIXED_SERVER_COST_MONTHLY_USD / Decimal(days_in_month)
+
+
+def _fixed_cost_for_range(period_start: date, num_days: int) -> Decimal:
+    """Sums _daily_fixed_cost() across every real calendar day in the period,
+    so a bucket spanning a month boundary blends both months' per-day rates
+    instead of assuming a single flat rate for the whole span."""
+    total = Decimal("0")
+    for offset in range(num_days):
+        total += _daily_fixed_cost(period_start + timedelta(days=offset))
+    return total.quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
+
+
+@app.get("/internal/costs/breakdown")
+async def costs_breakdown(
+    restaurant_id: int = 1,
+    group_by: str = Query(default="day", pattern="^(day|month|year)$"),
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+) -> dict[str, Any]:
+    """Per-period cost breakdown for the dashboard's summary sidebar and
+    breakdown table — buckets by UTC calendar day/month/year (same semantics
+    as /internal/costs/daily) and splits variable cost by provider
+    (openai/elevenlabs/plivo) via usage_events.provider, alongside a prorated
+    fixed server cost per period. Defaults to the last 30 days when no range
+    is given, to keep the default response bounded."""
+    trunc_unit = _TRUNC_UNIT[group_by]
+    range_end_excl = (end_date or datetime.now(timezone.utc).date()) + timedelta(days=1)
+    range_start = start_date or (range_end_excl - timedelta(days=30))
+
+    with _db() as conn, conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT
+                date_trunc(%s, occurred_at)::date AS period,
+                provider,
+                COALESCE(SUM(calculated_cost_usd), 0) AS cost_usd
+            FROM usage_events
+            WHERE restaurant_id = %s AND occurred_at >= %s AND occurred_at < %s
+            GROUP BY period, provider
+            ORDER BY period
+            """,
+            (trunc_unit, restaurant_id, range_start, range_end_excl),
+        )
+        provider_rows = cur.fetchall()
+
+        cur.execute(
+            f"""
+            SELECT date_trunc(%s, c.started_at)::date AS period, COUNT(*) AS call_count
+            FROM calls c
+            WHERE c.restaurant_id = %s AND c.started_at >= %s AND c.started_at < %s
+            GROUP BY period
+            """,
+            (trunc_unit, restaurant_id, range_start, range_end_excl),
+        )
+        call_counts = {row["period"]: row["call_count"] for row in cur.fetchall()}
+
+    def _bucket_start(day: date) -> date:
+        if group_by == "day":
+            return day
+        if group_by == "month":
+            return day.replace(day=1)
+        return day.replace(month=1, day=1)
+
+    # Materialize every calendar bucket in the requested range, including
+    # quiet periods. Fixed server cost still accrues when there are no calls.
+    periods: dict[Any, dict[str, Decimal]] = {}
+    cursor = range_start
+    while cursor < range_end_excl:
+        periods.setdefault(_bucket_start(cursor), {p: Decimal("0") for p in _BREAKDOWN_PROVIDERS})
+        cursor += timedelta(days=1)
+
+    for row in provider_rows:
+        bucket = periods.setdefault(row["period"], {p: Decimal("0") for p in _BREAKDOWN_PROVIDERS})
+        if row["provider"] in bucket:
+            bucket[row["provider"]] += row["cost_usd"]
+
+    def _period_end_excl(period_start: date) -> date:
+        """First day after this bucket's full calendar span (e.g. month ->
+        first day of next month), before clamping to the query window."""
+        if group_by == "day":
+            return period_start + timedelta(days=1)
+        if group_by == "month":
+            return date(
+                period_start.year + (period_start.month == 12),
+                1 if period_start.month == 12 else period_start.month + 1,
+                1,
+            )
+        return date(period_start.year + 1, 1, 1)
+
+    results = []
+    for period in sorted(periods):
+        provider_costs = periods[period]
+        variable_total = sum(provider_costs.values(), Decimal("0"))
+        # Clamp the period's fixed-cost span to the query window -- a
+        # group_by=month bucket that only partially overlaps [range_start,
+        # range_end_excl) must only be charged fixed cost for the days
+        # actually in range, not the whole calendar month.
+        span_start = max(period, range_start)
+        span_end_excl = min(_period_end_excl(period), range_end_excl)
+        num_days = max((span_end_excl - span_start).days, 0)
+        fixed_cost = _fixed_cost_for_range(span_start, num_days)
+        results.append({
+            "period": period.isoformat(),
+            "call_count": call_counts.get(period, 0),
+            "openai_cost_usd": str(provider_costs["openai"]),
+            "elevenlabs_cost_usd": str(provider_costs["elevenlabs"]),
+            "plivo_cost_usd": str(provider_costs["plivo"]),
+            "fixed_cost_usd": str(fixed_cost),
+            "total_cost_usd": str(variable_total + fixed_cost),
+        })
+
+    total_cost = sum((Decimal(r["total_cost_usd"]) for r in results), Decimal("0"))
+    total_calls = sum((r["call_count"] for r in results), 0)
+    avg_cost_per_call = (total_cost / total_calls) if total_calls else Decimal("0")
+
+    return {
+        "group_by": group_by,
+        "start_date": range_start.isoformat(),
+        "end_date": (range_end_excl - timedelta(days=1)).isoformat(),
+        "periods": results,
+        "summary": {
+            "total_cost_usd": str(total_cost),
+            "call_count": total_calls,
+            "avg_cost_per_call_usd": str(avg_cost_per_call.quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)),
+            "openai_cost_usd": str(sum((Decimal(r["openai_cost_usd"]) for r in results), Decimal("0"))),
+            "elevenlabs_cost_usd": str(sum((Decimal(r["elevenlabs_cost_usd"]) for r in results), Decimal("0"))),
+            "plivo_cost_usd": str(sum((Decimal(r["plivo_cost_usd"]) for r in results), Decimal("0"))),
+            "fixed_cost_usd": str(sum((Decimal(r["fixed_cost_usd"]) for r in results), Decimal("0"))),
+        },
     }
 
 
