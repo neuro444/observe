@@ -804,6 +804,195 @@ async def resolve_price_flag(flag_id: int, body: PriceFlagResolveIn) -> dict[str
     return _row_json_safe(dict(result))
 
 
+@app.get("/internal/price-book")
+async def list_price_book(
+    provider: Optional[str] = None,
+    status: Optional[str] = None,
+    include_history: bool = False,
+) -> dict[str, Any]:
+    """Every price_book row the dashboard's Rates admin table needs. Defaults
+    to only currently-active rows (approved AND effective_to IS NULL --
+    a pending row has no effective_to either, since it was never closed out,
+    so approval_status must be checked too or it would wrongly show as
+    active); include_history=true also returns pending/superseded/rejected
+    rows for the audit view."""
+    where = []
+    params: list[Any] = []
+    if not include_history:
+        where.append("effective_to IS NULL AND approval_status = 'approved'")
+    if provider is not None:
+        where.append("provider = %s")
+        params.append(provider)
+    if status is not None:
+        where.append("approval_status = %s")
+        params.append(status)
+    where_clause = f"WHERE {' AND '.join(where)}" if where else ""
+
+    with _db() as conn, conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT id, provider, model, billing_unit, input_rate, cached_input_rate,
+                   output_rate, flat_rate, effective_from, effective_to,
+                   pricing_source_url, approval_status, created_at
+            FROM price_book
+            {where_clause}
+            ORDER BY provider, model, effective_from DESC
+            """,
+            params,
+        )
+        rows = cur.fetchall()
+    return {"rates": [_row_json_safe(dict(row)) for row in rows]}
+
+
+class PriceBookCreateIn(BaseModel):
+    """Adds a new price_book row as 'pending' -- never affects billing until
+    a separate approve call. billing_unit determines which rate field(s)
+    apply: million_tokens uses input/cached/output_rate (see llm_cost());
+    everything else (1k_characters, minute, message) uses flat_rate (see
+    tts_cost()/stt_cost()/telephony_cost())."""
+    provider: str
+    model: str
+    billing_unit: str
+    input_rate: Optional[Decimal] = None
+    cached_input_rate: Optional[Decimal] = None
+    output_rate: Optional[Decimal] = None
+    flat_rate: Optional[Decimal] = None
+    pricing_source_url: Optional[str] = None
+
+
+@app.post("/internal/price-book")
+async def create_price_book_rate(body: PriceBookCreateIn) -> dict[str, Any]:
+    if body.billing_unit == "million_tokens":
+        if body.input_rate is None or body.output_rate is None:
+            raise HTTPException(422, "million_tokens rates need input_rate and output_rate")
+    elif body.flat_rate is None:
+        raise HTTPException(422, f"{body.billing_unit} rates need flat_rate")
+
+    now = datetime.now(timezone.utc)
+    with _db() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO price_book (provider, model, billing_unit, input_rate, cached_input_rate,
+                                     output_rate, flat_rate, effective_from, pricing_source_url,
+                                     approval_status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending')
+            RETURNING id, provider, model, billing_unit, input_rate, cached_input_rate,
+                      output_rate, flat_rate, effective_from, effective_to, pricing_source_url,
+                      approval_status, created_at
+            """,
+            (body.provider, body.model, body.billing_unit, body.input_rate, body.cached_input_rate,
+             body.output_rate, body.flat_rate, now, body.pricing_source_url),
+        )
+        result = cur.fetchone()
+        conn.commit()
+    return _row_json_safe(dict(result))
+
+
+@app.patch("/internal/price-book/{rate_id}/approve")
+async def approve_price_book_rate(rate_id: int) -> dict[str, Any]:
+    """Approving a pending row makes it live immediately and, if another
+    approved row is already active for the same (provider, model,
+    billing_unit), closes that row out at this same moment -- atomically, so
+    there is never a gap or overlap in what's active."""
+    now = datetime.now(timezone.utc)
+    with _db() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, provider, model, billing_unit, approval_status FROM price_book WHERE id = %s",
+            (rate_id,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise HTTPException(404, "price_book row not found")
+        if row["approval_status"] != "pending":
+            raise HTTPException(409, f"row is '{row['approval_status']}', not pending")
+
+        cur.execute(
+            """
+            UPDATE price_book SET effective_to = %s
+            WHERE provider = %s AND model = %s AND billing_unit = %s
+              AND approval_status = 'approved' AND effective_to IS NULL AND id != %s
+            """,
+            (now, row["provider"], row["model"], row["billing_unit"], rate_id),
+        )
+        cur.execute(
+            """
+            UPDATE price_book SET approval_status = 'approved', effective_from = %s
+            WHERE id = %s
+            RETURNING id, provider, model, billing_unit, input_rate, cached_input_rate,
+                      output_rate, flat_rate, effective_from, effective_to, pricing_source_url,
+                      approval_status, created_at
+            """,
+            (now, rate_id),
+        )
+        result = cur.fetchone()
+        conn.commit()
+    return _row_json_safe(dict(result))
+
+
+class PriceBookRejectIn(BaseModel):
+    reason: Optional[str] = None
+
+
+@app.patch("/internal/price-book/{rate_id}/reject")
+async def reject_price_book_rate(rate_id: int, body: PriceBookRejectIn = PriceBookRejectIn()) -> dict[str, Any]:
+    """Rejecting a pending row never touches any other row -- whatever was
+    already active (if anything) keeps billing exactly as before."""
+    with _db() as conn, conn.cursor() as cur:
+        cur.execute("SELECT id, approval_status FROM price_book WHERE id = %s", (rate_id,))
+        row = cur.fetchone()
+        if row is None:
+            raise HTTPException(404, "price_book row not found")
+        if row["approval_status"] != "pending":
+            raise HTTPException(409, f"row is '{row['approval_status']}', not pending")
+
+        cur.execute(
+            """
+            UPDATE price_book SET approval_status = 'rejected'
+            WHERE id = %s
+            RETURNING id, provider, model, billing_unit, input_rate, cached_input_rate,
+                      output_rate, flat_rate, effective_from, effective_to, pricing_source_url,
+                      approval_status, created_at
+            """,
+            (rate_id,),
+        )
+        result = cur.fetchone()
+        conn.commit()
+    return _row_json_safe(dict(result))
+
+
+@app.post("/internal/price-book/{rate_id}/deactivate")
+async def deactivate_price_book_rate(rate_id: int) -> dict[str, Any]:
+    """Stops an active, approved row from pricing new usage going forward
+    (effective_to = now). Never a DELETE -- past usage_events keep their own
+    price_version_id and are unaffected."""
+    now = datetime.now(timezone.utc)
+    with _db() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, approval_status, effective_to FROM price_book WHERE id = %s", (rate_id,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise HTTPException(404, "price_book row not found")
+        if row["approval_status"] != "approved":
+            raise HTTPException(409, f"row is '{row['approval_status']}', not approved")
+        if row["effective_to"] is not None:
+            raise HTTPException(409, "row is already inactive")
+
+        cur.execute(
+            """
+            UPDATE price_book SET effective_to = %s
+            WHERE id = %s
+            RETURNING id, provider, model, billing_unit, input_rate, cached_input_rate,
+                      output_rate, flat_rate, effective_from, effective_to, pricing_source_url,
+                      approval_status, created_at
+            """,
+            (now, rate_id),
+        )
+        result = cur.fetchone()
+        conn.commit()
+    return _row_json_safe(dict(result))
+
+
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
