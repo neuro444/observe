@@ -28,7 +28,7 @@ from typing import Any, Optional
 import psycopg2
 import psycopg2.extras
 from apscheduler.schedulers.background import BackgroundScheduler
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from cost_engine import PriceBookLookup, RateNotFoundError, calculate_cost
@@ -472,13 +472,22 @@ async def run_review_scan(review_date: Optional[date] = None) -> dict[str, Any]:
 
 
 @app.get("/internal/costs/daily")
-async def daily_cost(restaurant_id: int = 1, target_date: Optional[date] = None) -> dict[str, Any]:
+async def daily_cost(
+    restaurant_id: int = 1,
+    target_date: Optional[date] = None,
+    date_alias: Optional[date] = Query(default=None, alias="date"),
+) -> dict[str, Any]:
     """Phase 1's actual ask: one basic daily cost total. Variable cost is the
     real sum of that day's usage_events; fixed cost is the flat monthly
     server cost prorated to a day. Channel is inferred from call_id — every
     WhatsApp event this codebase creates uses a "whatsapp-..." call_id (see
-    utils/whatsapp_cost_capture.py); everything else is the phone line."""
-    day = target_date or datetime.now(timezone.utc).date()
+    utils/whatsapp_cost_capture.py); everything else is the phone line.
+
+    Accepts `date` as an alias for `target_date` — the more natural name
+    callers reach for first, and FastAPI silently drops unknown query
+    params rather than erroring, so a mismatched name here used to fail
+    silently by defaulting to today instead of the requested date."""
+    day = target_date or date_alias or datetime.now(timezone.utc).date()
     range_start = day
     range_end = day + timedelta(days=1)
 
