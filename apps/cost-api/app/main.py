@@ -34,10 +34,17 @@ from pydantic import BaseModel, Field
 from cost_engine import PriceBookLookup, RateNotFoundError, calculate_cost
 
 from anomalies import scan_and_record
+import plivo_cdr_sync
 
 logger = logging.getLogger(__name__)
 
 COST_INGEST_SECRET = os.getenv("COST_INGEST_SECRET", "")
+PLIVO_HANGUP_SECRET = os.getenv("PLIVO_HANGUP_SECRET", "")
+# Fallback per-minute rate used for the *estimated* cost written at HANGUP time.
+# Once the CDR resolves, this is replaced with the exact Plivo total_amount.
+# Update this to match your actual Plivo contract rate; it will later be read
+# from price_book once a Plivo rate row is seeded there.
+PLIVO_RATE_PER_MINUTE = Decimal(os.getenv("PLIVO_RATE_PER_MINUTE", "0.0085"))
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql://neuroheart:dev_only_change_in_real_deployment@127.0.0.1:5433/cost_ledger",
@@ -62,9 +69,25 @@ def _run_nightly_scan() -> None:
         logger.exception("nightly anomaly scan failed for %s", review_date)
 
 
+def _run_nightly_plivo_backfill() -> None:
+    """Resolve any Plivo usage_events still 'pending' from yesterday.
+    Runs one hour after the anomaly scan so the scans don't overlap."""
+    try:
+        resolved = plivo_cdr_sync.run_nightly_plivo_backfill(DATABASE_URL)
+        logger.info("nightly Plivo backfill: %d call(s) resolved", resolved)
+    except Exception:
+        logger.exception("nightly Plivo backfill failed")
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     _scheduler.add_job(_run_nightly_scan, "cron", hour=ANOMALY_SCAN_HOUR_UTC, id="nightly_anomaly_scan")
+    _scheduler.add_job(
+        _run_nightly_plivo_backfill,
+        "cron",
+        hour=ANOMALY_SCAN_HOUR_UTC + 1,  # 1 h after anomaly scan
+        id="nightly_plivo_backfill",
+    )
     _scheduler.start()
     yield
     _scheduler.shutdown(wait=False)
@@ -423,6 +446,83 @@ async def daily_cost(restaurant_id: int = 1, target_date: Optional[date] = None)
         "fixed_cost_usd": str(fixed_cost),
         "total_cost_usd": str(variable_cost + fixed_cost),
     }
+
+
+# ---------------------------------------------------------------------------
+# Plivo HANGUP webhook
+# ---------------------------------------------------------------------------
+
+class PlivoHangupPayload(BaseModel):
+    """
+    Payload sent by the Plivo Agent HANGUP event callback.
+
+    Plivo's required fields (present in all HANGUP callbacks):
+      call_uuid     - maps to usage_events.call_id and the Plivo CDR key.
+      caller        - raw From number; immediately hashed, never stored as PII.
+      bill_duration - billed seconds (60-second rounded-up increments).
+
+    Phase 2 fields (injected once the cloned-agent config is wired):
+      conversation_id  - Plivo Agent Run ID (links to Agent Runs tab in Console).
+      conversation_url - Deep-link URL to the Agent Run reasoning trace.
+
+    restaurant_id defaults to 1 for single-restaurant deployments.  Extend
+    once multi-restaurant support is needed.
+    """
+    call_uuid: str
+    caller: str
+    bill_duration: int
+    conversation_id: Optional[str] = None
+    conversation_url: Optional[str] = None
+    restaurant_id: int = 1
+
+
+@app.post("/internal/plivo/hangup")
+async def ingest_plivo_hangup(payload: PlivoHangupPayload, request: Request) -> dict[str, Any]:
+    """
+    Receives the Plivo Agent HANGUP event and triggers the two-phase cost
+    capture workflow:
+      1. Validates the X-Actions-Secret header (constant-time comparison).
+      2. Writes a 'pending' usage_events row with an estimated cost
+         (BillDuration × PLIVO_RATE_PER_MINUTE from env).
+      3. Schedules fetch_cdr to run 60 s later via APScheduler, which will
+         update the row with the exact Plivo CDR total_amount.
+    """
+    # --- auth ---
+    incoming_secret = request.headers.get("X-Actions-Secret", "")
+    if not PLIVO_HANGUP_SECRET:
+        logger.warning("ingest_plivo_hangup: PLIVO_HANGUP_SECRET not set — rejecting request")
+        raise HTTPException(status_code=403, detail="webhook secret not configured on server")
+    if not hmac.compare_digest(incoming_secret, PLIVO_HANGUP_SECRET):
+        raise HTTPException(status_code=403, detail="invalid webhook secret")
+
+    # --- phase A: write estimated pending record ---
+    plivo_cdr_sync.store_pending_cdr(
+        call_uuid=payload.call_uuid,
+        restaurant_id=payload.restaurant_id,
+        caller=payload.caller,
+        bill_duration=payload.bill_duration,
+        conversation_id=payload.conversation_id,
+        conversation_url=payload.conversation_url,
+        estimated_rate_per_minute=PLIVO_RATE_PER_MINUTE,
+        database_url=DATABASE_URL,
+    )
+
+    # --- phase B: schedule exact CDR fetch 60 s from now ---
+    run_at = datetime.now(timezone.utc) + timedelta(seconds=60)
+    _scheduler.add_job(
+        plivo_cdr_sync.fetch_cdr,
+        "date",
+        run_date=run_at,
+        args=[payload.call_uuid, DATABASE_URL],
+        kwargs={"scheduler": _scheduler, "retry_count": 0},
+        id=f"plivo_cdr_{payload.call_uuid}",
+        replace_existing=True,  # handle duplicate HANGUP deliveries gracefully
+    )
+    logger.info(
+        "ingest_plivo_hangup: pending record written; CDR fetch scheduled at %s for %s",
+        run_at.isoformat(), payload.call_uuid,
+    )
+    return {"status": "accepted", "call_uuid": payload.call_uuid, "cdr_fetch_at": run_at.isoformat()}
 
 
 @app.get("/health")
