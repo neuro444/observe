@@ -42,8 +42,14 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Config ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“ injected from env, never hard-coded
 # ---------------------------------------------------------------------------
+from pathlib import Path
 from dotenv import load_dotenv
-load_dotenv()
+
+_env_path = Path(__file__).resolve().parent.parent / ".env"
+if _env_path.exists():
+    load_dotenv(_env_path)
+else:
+    load_dotenv()
 
 PLIVO_AUTH_ID: str = os.getenv("PLIVO_AUTH_ID", "")
 PLIVO_AUTH_TOKEN: str = os.getenv("PLIVO_AUTH_TOKEN", "")

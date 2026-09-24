@@ -36,8 +36,14 @@ from cost_engine import PriceBookLookup, RateNotFoundError, calculate_cost
 from anomalies import scan_and_record
 import plivo_cdr_sync
 
+from pathlib import Path
 from dotenv import load_dotenv
-load_dotenv()
+
+_env_path = Path(__file__).resolve().parent.parent / ".env"
+if _env_path.exists():
+    load_dotenv(_env_path)
+else:
+    load_dotenv()
 
 logger = logging.getLogger(__name__)
 
