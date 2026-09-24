@@ -90,10 +90,10 @@ class TestFetchCdrFinalAmount(unittest.TestCase):
         self.assertEqual(cur.execute.call_count, 2)
         conn.commit.assert_called_once()
 
-        # The first execute should update calculated_cost_usd to 0.015000
+        # The first execute should update calculated_cost_usd to 0.045000 (0.0150 + 0.0300)
         first_call_args = cur.execute.call_args_list[0][0]
         params = first_call_args[1]
-        self.assertEqual(params[0], Decimal("0.015000"))
+        self.assertEqual(params[0], Decimal("0.045000"))
         self.assertEqual(params[1], Decimal("60"))   # audio_seconds
         self.assertEqual(params[3], CALL_UUID)       # call_id filter
 
@@ -173,7 +173,7 @@ class TestStorePendingCdr(unittest.TestCase):
             bill_duration=60,
             conversation_id="conv-abc",
             conversation_url="https://cx.plivo.com/...",
-            estimated_rate_per_minute=Decimal("0.0085"),
+            estimated_rate_per_minute=Decimal("0.0355"),
             database_url=DATABASE_URL,
         )
 
@@ -183,7 +183,7 @@ class TestStorePendingCdr(unittest.TestCase):
 
     @patch("plivo_cdr_sync._connect")
     def test_estimated_cost_calculation(self, mock_connect):
-        """60 seconds billed at $0.0085/min should produce $0.0085 estimated cost."""
+        """60 seconds billed at $0.0355/min should produce $0.0355 estimated cost."""
         conn, cur = _mock_conn()
         mock_connect.return_value = conn
 
@@ -194,7 +194,7 @@ class TestStorePendingCdr(unittest.TestCase):
             bill_duration=60,
             conversation_id=None,
             conversation_url=None,
-            estimated_rate_per_minute=Decimal("0.0085"),
+            estimated_rate_per_minute=Decimal("0.0355"),
             database_url=DATABASE_URL,
         )
 
@@ -202,7 +202,7 @@ class TestStorePendingCdr(unittest.TestCase):
         insert_params = cur.execute.call_args_list[1][0][1]
         # index 5 = calculated_cost_usd
         estimated_cost = insert_params[5]
-        self.assertEqual(estimated_cost, Decimal("0.008500"))
+        self.assertEqual(estimated_cost, Decimal("0.035500"))
 
     @patch("plivo_cdr_sync._connect")
     def test_caller_is_hashed(self, mock_connect):
@@ -218,7 +218,7 @@ class TestStorePendingCdr(unittest.TestCase):
             bill_duration=60,
             conversation_id=None,
             conversation_url=None,
-            estimated_rate_per_minute=Decimal("0.0085"),
+            estimated_rate_per_minute=Decimal("0.0355"),
             database_url=DATABASE_URL,
         )
 

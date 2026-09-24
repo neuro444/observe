@@ -1,0 +1,17 @@
+### Files delivered on plivo-max branch on observe --> neuroheart-internal-platform
+
+   File                     | What it does
+  --------------------------+-------------------------------------------------------------------
+   004_add_plivo_fields.sql | Adds cost_status to usage_events +
+                            | conversation_id/conversation_url to calls
+   plivo_cdr_sync.py        | The two-phase sync engine: store_pending_cdr, fetch_cdr with
+                            | retry, run_nightly_plivo_backfill
+   main.py                  | POST /internal/plivo/hangup endpoint + nightly cron job
+   test_plivo_sync.py       | 9 tests, fully mocked — no DB or Plivo account required
+
+  ### To go live, I need 3 things:
+
+  1. Run migration 004 against your local Postgres.
+  2. Fill in .env — PLIVO_AUTH_ID, PLIVO_AUTH_TOKEN, PLIVO_HANGUP_SECRET, PLIVO_RATE_PER_MINUTE.
+  3. Phase 2 (separate) — update the cloned Plivo agent config to pass the X-Actions-Secret
+  header + inject conversation_id into the HANGUP body.

@@ -36,15 +36,17 @@ from cost_engine import PriceBookLookup, RateNotFoundError, calculate_cost
 from anomalies import scan_and_record
 import plivo_cdr_sync
 
+from dotenv import load_dotenv
+load_dotenv()
+
 logger = logging.getLogger(__name__)
 
 COST_INGEST_SECRET = os.getenv("COST_INGEST_SECRET", "")
 PLIVO_HANGUP_SECRET = os.getenv("PLIVO_HANGUP_SECRET", "")
 # Fallback per-minute rate used for the *estimated* cost written at HANGUP time.
-# Once the CDR resolves, this is replaced with the exact Plivo total_amount.
-# Update this to match your actual Plivo contract rate; it will later be read
-# from price_book once a Plivo rate row is seeded there.
-PLIVO_RATE_PER_MINUTE = Decimal(os.getenv("PLIVO_RATE_PER_MINUTE", "0.0085"))
+# Once the CDR resolves, this is replaced with the exact Plivo total_amount plus voice agent fee.
+# Includes both carrier telephony fee and Voice Agent runtime fee (e.g. 0.0055 + 0.0300 = 0.0355).
+PLIVO_RATE_PER_MINUTE = Decimal(os.getenv("PLIVO_RATE_PER_MINUTE", "0.0355"))
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql://neuroheart:dev_only_change_in_real_deployment@127.0.0.1:5433/cost_ledger",

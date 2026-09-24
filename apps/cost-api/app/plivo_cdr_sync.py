@@ -6,7 +6,7 @@ billing engine:
 
   Phase A (immediate, on HANGUP webhook):
     The HANGUP callback fires instantly.  We write an *estimated* cost
-    (BillDuration × our known Plivo rate from price_book) to usage_events
+    (BillDuration ÃƒÆ’Ã¢â‚¬â€ our known Plivo rate from price_book) to usage_events
     with cost_status='pending'.
 
   Phase B (~60 s later, background):
@@ -19,7 +19,7 @@ billing engine:
     (e.g. server was temporarily unreachable when Phase B fired).
 
 Credentials are read from env vars PLIVO_AUTH_ID / PLIVO_AUTH_TOKEN.
-Set them in apps/cost-api/.env — never commit the values.
+Set them in apps/cost-api/.env ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â never commit the values.
 """
 from __future__ import annotations
 
@@ -40,16 +40,20 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Config – injected from env, never hard-coded
+# Config ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“ injected from env, never hard-coded
 # ---------------------------------------------------------------------------
+from dotenv import load_dotenv
+load_dotenv()
+
 PLIVO_AUTH_ID: str = os.getenv("PLIVO_AUTH_ID", "")
 PLIVO_AUTH_TOKEN: str = os.getenv("PLIVO_AUTH_TOKEN", "")
+PLIVO_VOICE_AGENT_RATE_PER_MINUTE: Decimal = Decimal(os.getenv("PLIVO_VOICE_AGENT_RATE_PER_MINUTE", "0.0300"))
 _CDR_URL = "https://api.plivo.com/v1/Account/{auth_id}/Call/{call_uuid}/"
 
 _MAX_RETRIES = 3
 # delay in seconds before each retry attempt (indexed by retry_count 1..3)
 _RETRY_DELAYS = {1: 90, 2: 180, 3: 360}
-_MONEY = Decimal("0.000001")   # six decimal places throughout – no floats
+_MONEY = Decimal("0.000001")   # six decimal places throughout ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“ no floats
 
 
 # ---------------------------------------------------------------------------
@@ -197,12 +201,18 @@ def fetch_cdr(
         return
 
     billed_duration = int(data.get("billed_duration", 0))
+
+    # Calculate the Voice Agent runtime fee and add it to the carrier's CDR total_amount
+    billable_minutes = (Decimal(billed_duration) / Decimal("60")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+    agent_cost = (billable_minutes * PLIVO_VOICE_AGENT_RATE_PER_MINUTE).quantize(_MONEY, rounding=ROUND_HALF_UP)
+    actual_total_cost = total_amount + agent_cost
+
     hangup_cause = data.get("hangup_cause", "")
     logger.info(
-        "fetch_cdr: finalising %s — $%s, %ds billed, cause=%s",
-        call_uuid, total_amount, billed_duration, hangup_cause,
+        "fetch_cdr: finalising %s â€” Carrier=$%s + Agent=$%s -> Total=$%s, %ds billed, cause=%s",
+        call_uuid, total_amount, agent_cost, actual_total_cost, billed_duration, hangup_cause,
     )
-    _commit_final_cdr(call_uuid, total_amount, billed_duration, database_url)
+    _commit_final_cdr(call_uuid, actual_total_cost, billed_duration, database_url)
 
 
 def _schedule_retry(
@@ -321,5 +331,5 @@ def run_nightly_plivo_backfill(database_url: str) -> int:
 # Internal helpers
 # ---------------------------------------------------------------------------
 def _hash_caller(raw_number: str) -> str:
-    """One-way hash of the caller number — never store PII directly."""
+    """One-way hash of the caller number ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â never store PII directly."""
     return hashlib.sha256(raw_number.encode()).hexdigest()[:32]
