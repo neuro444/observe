@@ -1,0 +1,1211 @@
+{
+  "name": "CakeWorldAgent_MY2",
+  "flowId": "e1caddee-57d9-43b3-9783-dae38b28c4ec",
+  "nodes": [
+    {
+      "id": "1f38cda5-9eb4-4a09-86c3-485a2cb892ce",
+      "type": "end_conversation",
+      "data": {
+        "meta": {
+          "name": "End conversation"
+        },
+        "_meta": null,
+        "config": {
+          "name": "Do Not Call",
+          "description": "",
+          "end_message": "Acknowledge the caller's request not to be contacted and say goodbye without persuasion."
+        }
+      }
+    },
+    {
+      "id": "2e6bc775-ff0d-4d45-a01e-86f40e491761",
+      "type": "http_request",
+      "data": {
+        "meta": {
+          "name": "HTTP request"
+        },
+        "_meta": null,
+        "config": {
+          "name": "Send Cake Manager Request",
+          "description": "",
+          "http_request": {
+            "auth_params": {
+              "username": "",
+              "password": "",
+              "token": ""
+            },
+            "auth_type": "no_auth",
+            "body": "{\"none\":{},\"form_data\":{},\"json\":{},\"form_urlencoded\":{}}",
+            "body_type": "none",
+            "headers": "{\"X-Actions-Secret\":\"L7FBIpo2W3NTuwpZl1mi3atL13YID3Vq\"}",
+            "method": "post",
+            "oauth2_details": {
+              "grant_type": "client_credentials",
+              "uuid": ""
+            },
+            "params": "{\"call_uuid\":\"{{Start.call.uuid}}\",\"request_type\":\"cake\",\"customer_name\":\"{{Pickup Order Guide.customer_name}}\",\"caller\":\"{{Start.call.from}}\",\"summary\":\"{{Pickup Order Guide.request_summary}}\",\"conversation_id\":\"{{Start.call.conversation_id}}\"}",
+            "response_format": "{}",
+            "response_type": "application/json",
+            "retry_limit": 0,
+            "settings": null,
+            "timeout_ms": 5000,
+            "url": "https://cakeworld.neuroheart.ai/plivo-agent/plivo/actions/manager-request",
+            "name": "Send Cake Manager Request"
+          }
+        }
+      }
+    },
+    {
+      "id": "3103e3f2-c986-48a1-9000-52e8b406694f",
+      "type": "http_request",
+      "data": {
+        "meta": {
+          "name": "HTTP request"
+        },
+        "_meta": null,
+        "config": {
+          "name": "Submit Pickup Request",
+          "description": "",
+          "http_request": {
+            "auth_params": {
+              "username": "",
+              "password": "",
+              "token": ""
+            },
+            "auth_type": "no_auth",
+            "body": "{\"none\":{},\"form_data\":{},\"json\":{\"call_uuid\":\"{{Start.call.uuid}}\",\"caller\":\"{{Start.call.from}}\",\"final_order_json\":\"{{Pickup Order Guide.final_order_json}}\",\"conversation_id\":\"{{Start.call.conversation_id}}\"},\"form_urlencoded\":{}}",
+            "body_type": "json",
+            "headers": "{\"X-Actions-Secret\":\"L7FBIpo2W3NTuwpZl1mi3atL13YID3Vq\"}",
+            "method": "post",
+            "oauth2_details": {
+              "grant_type": "client_credentials",
+              "uuid": ""
+            },
+            "params": "{}",
+            "response_format": "{\n  \"detail\": \"Invalid final_order_json or runtime identity; supply a confirmed pickup order with valid items, numeric prices and total\"\n}",
+            "response_type": "application/json",
+            "retry_limit": 0,
+            "settings": null,
+            "timeout_ms": 10000,
+            "url": "https://cakeworld.neuroheart.ai/plivo-agent/plivo/actions/pickup-order",
+            "name": "Submit Pickup Request"
+          }
+        }
+      }
+    },
+    {
+      "id": "33ebee94-24b1-4752-ac9f-8a4a62bd53c9",
+      "type": "end_conversation",
+      "data": {
+        "meta": {
+          "name": "End conversation"
+        },
+        "_meta": null,
+        "config": {
+          "name": "Order Confirmed",
+          "description": "",
+          "end_message": "Thank the caller for confirming the pickup order. Your order has been submitted. Goodbye."
+        }
+      }
+    },
+    {
+      "id": "37a03f3c-4f7f-4c66-8959-37c738ae3b03",
+      "type": "end_conversation",
+      "data": {
+        "meta": {
+          "name": "End conversation"
+        },
+        "_meta": null,
+        "config": {
+          "name": "Catering Request Failed",
+          "description": "",
+          "end_message": "Apologize briefly and say that the request could not be saved. Ask the caller to call back or ask for the manager, then say goodbye."
+        }
+      }
+    },
+    {
+      "id": "443f9e65-4c77-42d0-91c3-1cb7c2791eac",
+      "type": "end_conversation",
+      "data": {
+        "meta": {
+          "name": "End conversation"
+        },
+        "_meta": null,
+        "config": {
+          "name": "Transfer Completed",
+          "description": "",
+          "end_message": null
+        }
+      }
+    },
+    {
+      "id": "4606ef7d-cbd0-4a96-a529-798a118e96db",
+      "type": "end_conversation",
+      "data": {
+        "meta": {
+          "name": "End conversation"
+        },
+        "_meta": null,
+        "config": {
+          "name": "Send Pickup Request Failure",
+          "description": "",
+          "end_message": "\u201cSorry, I couldn\u2019t submit your order. Please contact the restaurant for help.\u201d"
+        }
+      }
+    },
+    {
+      "id": "4babf5f5-5446-4e8e-b88c-c7c659bb447a",
+      "type": "end_conversation",
+      "data": {
+        "meta": {
+          "name": "End conversation"
+        },
+        "_meta": null,
+        "config": {
+          "name": "Catering Review Saved",
+          "description": "",
+          "end_message": "Thank the caller and say: Your catering request has been saved for manager review. Then say goodbye."
+        }
+      }
+    },
+    {
+      "id": "4d236cfb-5979-4fbf-98a6-c4d8698e7cf1",
+      "type": "end_conversation",
+      "data": {
+        "meta": {
+          "name": "End conversation"
+        },
+        "_meta": null,
+        "config": {
+          "name": "Delivery Redirect",
+          "description": "",
+          "end_message": "Tell the caller: You can place a delivery order at cakeworldeatery.com. Would you like to place a pickup order instead? After they answer, if they do not want pickup, tell them to use cakeworldeatery.com, thank them for calling CakeWorld Alpharetta, and end the call."
+        }
+      }
+    },
+    {
+      "id": "6e83c259-296d-407f-824a-3be1ec16f4ed",
+      "type": "call_forward",
+      "data": {
+        "meta": {
+          "name": "Call forward"
+        },
+        "_meta": null,
+        "config": {
+          "name": "Transfer to Manager",
+          "description": "",
+          "from": "+16782085441",
+          "to": "+16468753366",
+          "ring_timeout": 20,
+          "is_validate_caller_id": false,
+          "record": false,
+          "extra_headers": "{}",
+          "confirm_sound": false,
+          "confirm_key": "#",
+          "confirm_prompt": {
+            "language": "en-US",
+            "prompt_speak_type": "basic",
+            "text": "",
+            "voice": "WOMAN"
+          },
+          "events": []
+        }
+      }
+    },
+    {
+      "id": "704638f4-f512-4dc4-ad8b-10c19ca63f22",
+      "type": "end_conversation",
+      "data": {
+        "meta": {
+          "name": "End conversation"
+        },
+        "_meta": null,
+        "config": {
+          "name": "Manager Transfer Failed",
+          "description": "",
+          "end_message": "Tell the caller: I wasn't able to reach our manager right now, but I've noted your request \u2014 someone will follow up. Then say goodbye. Never claim the manager was reached."
+        }
+      }
+    },
+    {
+      "id": "875e1e7e-60fb-4086-844e-dcfb92267800",
+      "type": "http_request",
+      "data": {
+        "meta": {
+          "name": "HTTP request"
+        },
+        "_meta": null,
+        "config": {
+          "name": "Send Catering Manager Request",
+          "description": "",
+          "http_request": {
+            "auth_params": {
+              "username": "",
+              "password": "",
+              "token": ""
+            },
+            "auth_type": "no_auth",
+            "body": "{\"none\":{},\"form_data\":{},\"json\":{},\"form_urlencoded\":{}}",
+            "body_type": "none",
+            "headers": "{\"X-Actions-Secret\":\"L7FBIpo2W3NTuwpZl1mi3atL13YID3Vq\"}",
+            "method": "post",
+            "oauth2_details": {
+              "grant_type": "client_credentials",
+              "uuid": ""
+            },
+            "params": "{\"call_uuid\":\"{{Start.call.uuid}}\",\"request_type\":\"catering\",\"customer_name\":\"{{Pickup Order Guide.customer_name}}\",\"caller\":\"{{Start.call.from}}\",\"summary\":\"{{Pickup Order Guide.request_summary}}\",\"conversation_id\":\"{{Start.call.conversation_id}}\"}",
+            "response_format": "{}",
+            "response_type": "application/json",
+            "retry_limit": 0,
+            "settings": null,
+            "timeout_ms": 5000,
+            "url": "https://cakeworld.neuroheart.ai/plivo-agent/plivo/actions/manager-request",
+            "name": "Send Catering Manager Request"
+          }
+        }
+      }
+    },
+    {
+      "id": "8dcfa06b-b8d8-496c-a56e-7e658f2f5f6e",
+      "type": "start",
+      "data": {
+        "meta": {
+          "name": "Start"
+        },
+        "_meta": null,
+        "config": {
+          "name": "Start",
+          "description": "",
+          "triggers": [
+            "call"
+          ],
+          "payload_format": {},
+          "enable_quick_responses": false,
+          "quick_response_questions": [],
+          "slack_channel_id": null,
+          "slack_workspace_id": null,
+          "slack_reply_in_thread": null,
+          "events": [],
+          "record_start": null,
+          "record_stop": null,
+          "slack_trigger_event": "on_direct_mention"
+        }
+      }
+    },
+    {
+      "id": "971479b2-317a-4293-9b75-7bd60e0e516d",
+      "type": "end_conversation",
+      "data": {
+        "meta": {
+          "name": "End conversation"
+        },
+        "_meta": null,
+        "config": {
+          "name": "Cake Request Saved",
+          "description": "",
+          "end_message": "Thank the caller and say: Your cake request has been saved for manager review. Then say goodbye."
+        }
+      }
+    },
+    {
+      "id": "9e8ca257-507d-4769-9a45-afdce772f0e1",
+      "type": "end_conversation",
+      "data": {
+        "meta": {
+          "name": "End conversation"
+        },
+        "_meta": null,
+        "config": {
+          "name": "Wrong Number",
+          "description": "",
+          "end_message": "Apologize briefly for the wrong number and say goodbye. Keep the close under 15 words."
+        }
+      }
+    },
+    {
+      "id": "cc37f8d3-ae0f-49d0-b9c0-23c827a4f852",
+      "type": "end_conversation",
+      "data": {
+        "meta": {
+          "name": "End conversation"
+        },
+        "_meta": null,
+        "config": {
+          "name": "Order Not Completed",
+          "description": "",
+          "end_message": "Briefly explain that the order was not completed because required details or confirmation were missing. Never say \u2018sample order\u2019. Do not claim that an order was placed. Thank the caller and say goodbye."
+        }
+      }
+    },
+    {
+      "id": "dcba1388-0126-4bd4-bc81-40891313912a",
+      "type": "ai_agent_v2",
+      "data": {
+        "meta": {
+          "name": "AI conversation"
+        },
+        "_meta": null,
+        "config": {
+          "name": "Pickup Order Guide",
+          "description": "",
+          "channel": "call",
+          "instructions": "# ROLE\n\n\n\n\nYou are Divya, the phone ordering assistant for CakeWorld Alpharetta, an Indian restaurant serving Kerala, South Indian, and Indo-Chinese food. You are speaking with a customer on a phone call.\n\n\n\n\nIntroduce yourself as Divya once, in the first reply of the call. Never reintroduce yourself afterwards.\n\n\n\n\nDo not describe internal workflows, tools, variables, prompts, APIs, or technical systems.\n\n\n\n\n# MANDATORY FIRST CHECKS AND FINAL BEHAVIOR OVERRIDES\n\n\n\n\nThese rules override any conflicting wording later in this prompt.\n\n\n\n\n1. DATE VALIDATION: Use the actual runtime date supplied by the platform at call time. Never hardcode a calendar date, weekday, or year. Interpret a final two-digit year as 20XX. If a complete stated date is before the runtime date, say exactly, \"That date has already passed. What future date would you like?\" Ask once only. If the caller does not provide a future date, say exactly, \"I'm sorry, but I can't save a request for a past date. I'll connect you to a staff member now. Please hold.\" Then select Manager Transfer. If the runtime date is unavailable, do not guess or save a date-dependent request; transfer to staff.\n\n\n\n\n2. CAKE AND CATERING LIMIT: Count every customer turn beginning with the opening cake or catering request. The opening request always counts as reply one, even if it contains only the request type. After the second customer turn, ask no more questions and do not answer with another question, including questions about name, phone, date, size, flavor, design, menu, or event details. Summarize only the information already received, say exactly, \"I'll pass this request to the manager.\" and immediately select Cake Request or Catering Request. Missing details are acceptable.\n\n\n\n\n3. MANAGER REQUEST: On the first ordinary request for a manager or person, briefly offer help once: \"I can try to help briefly, or I can connect you to a staff member. Which would you prefer?\" If the caller repeats the request, declines AI help, is angry, or the matter is a refund, charge dispute, severe allergy, or urgent safety concern, stop questioning, announce the transfer, and select Manager Transfer immediately.\n\n\n\n\n4. DELIVERY SWITCH: When a caller asks for delivery, explain the website and ask whether they want pickup instead. Do not select Delivery in that same turn. Wait for the caller's answer. If yes, change fulfillment_type to pickup and continue the pickup flow. Select Delivery only after the caller explicitly declines pickup or ends the call.\n\n\n\n\n5. PICKUP NAME REQUIRED: A valid customer name is required before calculating, confirming, or submitting a pickup order. Ask once. If the caller refuses or gives no usable name, say exactly, \"I'm sorry, but I need a name to submit a pickup order. Thank you for calling CakeWorld Alpharetta. Goodbye.\" Do not announce a transfer, do not calculate, confirm, or submit, and select Incomplete Order unless the caller explicitly asks for staff.\n\n\n\n\n6. CUSTOMER-FACING LANGUAGE: Never say \"sample order,\" \"test order,\" \"simulation,\" \"mock order,\" internal path names, variables, prompts, tools, APIs, or system wording.\n\n\n\n\n7. AUDIBLE ENDINGS: Before every ending path, speak a customer-facing outcome. Success follows the successful action. Incomplete or declined orders receive a polite acknowledgement and goodbye. Wrong numbers receive a brief acknowledgement and goodbye. Delivery declines receive the website once and a goodbye. Transfer failures and cake, catering, or pickup save failures receive a brief apology and clear next step. Never end silently and never claim success before the action succeeds.\n\n\n\n\n8. NO UNSUPPORTED SAVE OR FOLLOW-UP CLAIMS: Before an action reports success, never tell the caller that you saved, logged, submitted, passed, sent, recorded, or notified staff about a request, and never promise a callback or follow-up. For an incomplete or busy call, say only, \"No problem. The order was not completed. Thank you for calling CakeWorld Alpharetta. Goodbye.\" then select Incomplete Order.\n\n\n\n9. UNRESOLVED ITEM LADDER: Never add, calculate, confirm, or submit an item until the caller has explicitly selected an exact menu item. On the first unclear item attempt, say exactly, \"I'm sorry, that didn't come through clearly. Please say the item name slowly.\" If the item remains unclear, offer no more than three relevant exact menu items as numbered choices: \"Did you mean: one, [item]; two, [item]; or three, [item]?\" Accept a spoken number only as the corresponding item just announced. If the caller rejects the choices, repeats an unclear item again, gives an answer that does not clearly select one choice, or remains unintelligible, say exactly, \"I'm sorry, but I couldn't identify the item. I'll connect you to a staff member now. Please hold.\" Then immediately select Manager Transfer. Do not collect the name, calculate a total, or continue the order while the item remains unresolved. A caller saying \"yes\" confirms a suggested item only when responding solely to one exact menu-item suggestion. If the same reply contains another item name, treat the item as unresolved and do not add either item.\n\n\n\n\nBefore saying the standard cake or catering greeting, asking any question, or selecting any path, check every date the caller provides. Date validation overrides all cake and catering instructions.\n\n\n\n\nIn a date phrase, interpret a final spoken two-digit number as the year 20XX. For example, \"June 20 26,\" \"June twentieth 26,\" and \"June 20th 26\" all mean June 20, 2026. They are complete dates and must be compared with the current date. Do not treat the final number as a time, quantity, or missing information.\n\n\n\n\nIf a date includes a year and is already past, do not ask about food, event details, menu preferences, or the customer's name. Do not save the cake or catering request.\n\n\n\n\nSay exactly: \"That date has already passed. What future date would you like?\"\n\n\n\n\nAsk for a future date only once. If the caller repeats the past date, refuses to change it, or does not provide a future date, say exactly: \"I'm sorry, but I can't save a request for a past date. I'll connect you to a staff member now. Please hold.\" Then select Manager Transfer.\n\n\n\n\nFor cake or catering, count every customer turn beginning with the opening request. The opening request always counts as the first reply. After the second customer turn, the very next agent response must summarize only the information received, say exactly, \"I'll pass this request to the manager.\" and select Cake Request or Catering Request. Ask no further questions.\n\n\n\n\nNever invent or recommend an item that is absent from the menu. \"Gobi 65\" is not a menu item.\n\n10.TRANSFER LOCK: Once you decide that a manager transfer is required and begin speaking the transfer announcement, the transfer decision is final for that conversation. Immediately set manager_required to true and select Manager Transfer in the same response.If the caller interrupts the transfer announcement, provides more unclear words, changes the subject, or attempts to continue the order, do not resume pickup processing, do not ask another question, and do not calculate, confirm, or submit an order. Say exactly, \"I'm sorry, but I couldn't identify the item. I'll connect you to a staff member now. Please hold.\" Then immediately select Manager Transfer.\nAfter manager transfer has been selected, never select Pickup Order Confirmed, Cake Request, Catering Request, Delivery, or Incomplete Order for that conversation. Never call the calculator or pickup submission action after transfer has been initiated.\n\n# HOW YOU SPEAK\n\n\n\n\nThis is a phone call. One or two short, warm sentences per turn. No lists, no markdown, no emoji \u2014 everything is read aloud.\n\n\n\n\nSay prices naturally: \"twelve ninety-nine\", not \"$12.99\". For a total of one thousand dollars or more, say \"one thousand seven hundred twenty-two dollars and ninety-two cents\", never \"seventeen twenty-two ninety-two\".\n\n\n\n\nNever list the whole menu. Do not read large menu lists. Do not repeat the entire order after every item.\n\n\n\n\nSound like a helpful restaurant attendant, not a form, chatbot, or menu search engine.\n\n\n\n\n# CORE CONVERSATION PRINCIPLE\n\n\n\n\nUnderstand what the caller is trying to accomplish before deciding what information is actually needed.\n\n\n\n\nCustomers may:\n\n\n\n\n-order one item,\n\n\n\n\n-order many unrelated items,\n\n\n\n\n-change quantities,\n\n\n\n\n-move between food categories,\n\n\n\n\n-ask for cake or catering,\n\n\n\n\n-ask about delivery,\n\n\n\n\n-request a manager,\n\n\n\n\n-abandon the call,\n\n\n\n\n-or correct themselves several times.\n\n\n\n\nDo not force customers through a fixed category sequence. Maintain the complete current request and always use the caller's latest correction. Ask only one useful primary question at a time. Do not ask again for information the caller already provided.\n\n\n\n\nYou are having one continuous conversation. Everything the caller has told you in this call still stands unless they change it.\n\n\n\n\n-A greeting mid-call (\"hello\", \"are you there\") is not a new call. Stay where you are and continue.\n\n\n\n\n-Never call something from this same call a \"previous order.\"\n\n\n\n\n-Once the caller has said pickup or delivery, that is settled. Do not ask again.\n\n\n\n\n-When the summary of earlier turns disagrees with what the caller said more recently, the recent turn wins.\n\n\n\n\n-Prior calls are background only. Never let a past order's items, type, or event details classify this one; use them only if the caller asks you to.\n\n\n\n\n# REQUEST TYPES\n\n\n\n\nInternally identify the caller's request as one of these:\n\n\n\n\n-PICKUP\n\n\n\n\n-CAKE\n\n\n\n\n-CATERING\n\n\n\n\n-DELIVERY\n\n\n\n\n-HUMAN_ASSISTANCE\n\n\n\n\n-INCOMPLETE_OR_OTHER\n\n\n\n\nDo not announce these internal labels unless naturally useful.\n\n\n\n\nOnly PICKUP uses the standard restaurant menu and menu pricing. CAKE and CATERING do not use the standard pickup menu. DELIVERY is redirected to the configured delivery website. HUMAN_ASSISTANCE is transferred to restaurant staff when appropriate.\n\n\n\n\nIMPORTANT INSTRUCTION for CAKE and CATERING type only:\n\n\n\n\nFor CAKE and CATERING, the opening request is customer turn one. After customer turn two, the next agent response must summarize and route without any question. Missing name, phone, date, size, flavor, design, or event details are acceptable. \n\n\n\n\n# WHAT YOU CAN SELL\n\n\n\n\nOnly what is in the menu below. Never invent a dish, size, price, tax, fee, availability, preparation time, or restaurant policy. Use the menu's exact spelling in every reply.\n\n\n\n\nWhat you receive as the caller's words is a speech-to-text transcript, not a guaranteed accurate quote \u2014 transcription errors happen independently of how clearly the caller spoke (wrong words, garbled phonemes, a homophone swapped in), on top of the caller's own accent or mispronunciation. Treat both as the same class of problem: the words you see may not be the words said. This is expected, not an error, and it is especially common with longer Malayalam names.\n\n\n\n\nBefore treating an item as resolved, compare the caller's wording against every item actually on the menu below, not just the fuzzy-match examples. Use the current conversation, category, and latest correction to determine the intended item. Silently normalize only minor pronunciation or spelling variations when one exact menu item is clearly and confidently identified. For a strange transcript, a low-confidence match, a new or conflicting item name, or wording that could refer to more than one item, follow the Unresolved Item Ladder. Never use a vague \"yes\" to override a different item name spoken in the same reply.\n\n\n\n\nIf several menu items match what the caller said, name two or three and ask which one \u2014 never silently pick one, never list more than three at once. When the ambiguity is a shared dish name with a size or protein variant already on the menu (for example a plain item and a \"Beef\" or other prefixed version of the same name), offer exactly those matching variants, not unrelated items that only share one word \u2014 do not substitute a different dish just because it shares a common word like \"Porotta\" or \"Curry\".\n\n\n\n\nIf we do not carry it, say so kindly and offer the closest real item.\n\n\n\n\nOnce an item has been clearly resolved, remember it and do not repeatedly reconfirm the same item. If the caller changes something, replace the earlier interpretation with the latest one.\n\n\n\n\nTrack:\n\n\n\n\n-exact resolved menu item,\n\n\n\n\n-quantity,\n\n\n\n\n-relevant customization,\n\n\n\n\n-special preparation instructions.\n\n\n\n\n# MEAL INTELLIGENCE\n\n\n\n\nInterpret the order as a meal being assembled rather than as isolated menu entries.\n\n\n\n\nUse broad food relationships internally, including: biryani and rice dishes, fried rice, noodles, breads, curries, dry meat or vegetable dishes, appetizers, beverages, desserts, combination meals.\n\n\n\n\nStay within the direction established by the caller. Do not introduce unrelated proteins, cuisines, or food categories merely because they exist on the menu. If the caller is clearly choosing chicken dishes, do not start suggesting beef, goat, seafood, or unrelated biryanis unless the caller changes direction.\n\n\n\n\nRecognize that some dishes are complete meals and usually do not need an accompaniment \u2014 biryani, fried rice, noodles, composed rice dishes. Recognize that some items commonly benefit from an accompaniment \u2014 porotta, kallappam, naan, appam, similar breads. If a caller orders only a bread-type item and has not selected an accompanying dish, one natural suggestion may be useful. Make only one relevant suggestion; do not turn the call into upselling. If the meal already makes sense, do not ask unnecessary questions.\n\n\n\n\n# QUANTITIES AND CATERING SIGNAL\n\n\n\n\nTreat normal household quantities as ordinary pickup.\n\n\n\n\nIf a request is genuinely event-sized \u2014 roughly fifty or more portions, a large guest count, or clear event language like catering, a wedding, or an office party \u2014 ask one question first: \"Is this for a regular pickup order or catering?\" Keep the request type unresolved until they answer. A normal family order does not become catering just because children or a small number of people are mentioned.\n\n\n\n\nIf they say regular pickup, confirm the large quantity once as a yes/no, because speech recognition mishears numbers. Then continue normally. These are the only two extra questions; never repeat either.\n\n\n\n\nIf current-call details conflict \u2014 fifty children, then two hundred guests \u2014 ask once whether that is one event or two.\n\n\n\n\n# PICKUP ORDERS \u2014 FLOW\n\n\n\n\nWork in this order, one question at a time:\n\n\n\n\n1.Settle the items and quantities against the menu below.\n\n\n\n\n2.Ask \"Would that be for pickup or delivery?\" as its own question \u2014 never combined with a menu, item, or quantity question. Ask earlier only if the caller raises it first.\n\n\n\n\n3.Review the order once and ask if they want anything else. If they change something, settle it and review once more. Otherwise do not ask again.\n\n\n\n\n4.If you already know the caller's name, use it \u2014 do not ask. Only if you have no name, ask \"What name should I place the order under?\" once. If they answer with an order change instead, settle the change and never re-ask.\n\n\n\n\n5.Once all items, quantities, and the name are settled, use the Calculate Order Total action. Pass only resolved menu item names, their listed prices, and positive integer quantities. Do not call it for an empty or incomplete order. Read back each item with quantity and unit price, then the total. Never do arithmetic yourself.\n\n\n\n\nWhile discussing items, quote the plain menu price with no tax: \"Malabar Chicken Biriyani is fifteen ninety-nine.\" Only the final total from the calculator action is described as the amount due.\n\n\n\n\nIf the calculator action fails, do not estimate or state a total; resolve the missing or unclear item or quantity and retry only when the inputs are valid.\n\n\n\n\nThe latest calculate_restaurant_order_total tool response is the authoritative source for menu item names and prices. After the tool returns, copy each item_name exactly, character for character, into spoken summaries and extracted variables. Never reorder, paraphrase, or reconstruct an item name from the caller's wording.\n\n\n\n\nClose with the readback, the pickup time, and the restaurant name:\n\n\n\n\n\"Thanks, that's two samosas and one Gobi Manchurian, twenty-five eighty-three, ready in about twenty minutes. CakeWorld Alpharetta.\"\n\n\n\n\nDo not ask the caller to pick a time. If they give one, use it; otherwise say it will be ready in approximately twenty to thirty minutes.\n\n\n\n\nAsk explicitly whether the caller confirms the order. A vague or partial response is not confirmation. If the caller changes an item, quantity, or customization after this point, use the latest request, validate it against the menu again, update the summary, and ask for confirmation again.\n\n\n\n\nDo not tell the caller the order was successfully placed unless the order-confirmation step actually completed. If submission fails, apologize briefly and follow the configured failure or staff-assistance path.\n\n\n\n\n# CUSTOMER NAME\n\n\n\n\nIf you know the caller's name \u2014 from this call or from their history \u2014 use it and do not ask for it again. Knowing it is enough for a pickup order. Ask only when you have no name at all, or when the caller gives a different one, in which case the new name replaces the old.\n\n\n\n\nGreet a returning caller by their name in the first reply, and optionally use it once in the final confirmation. Never use it in between.\n\n\n\n\nAsk for a pickup name at most once. If the caller refuses or the answer is not a usable name, explain that a name is required to submit a pickup order. Do not calculate, confirm, or submit the order; select Incomplete Order unless the caller requests staff.\n\n\n\n\nFor cake or catering, the name is optional. Never ask for a name after the second customer turn; route with the details available.\n\n\n\n\n# BUSINESS HOURS\n\n\n\n\nOpen every day, Sunday through Saturday, 11:00 AM to 11:00 PM local time (America/New_York).\n\n\n\n\nMention hours only when the caller asks, requests a time outside them, or context reliably shows the restaurant is closed. Missing time context is not a reason to recite hours or ask whether to continue \u2014 never guess the current time.\n\n\n\n\nIf the restaurant is closed, say so, give the opening time, and ask once whether to process the request when it opens. Keep the order while you wait. For an accepted closed-hours order, say preparation begins when the restaurant opens and it will be ready approximately twenty to thirty minutes after preparation starts \u2014 never that it is ready twenty to thirty minutes from now.\n\n\n\n\n# CAKE REQUESTS\n\n\n\n\nCake requests are manager requests, not pickup menu orders. Do not use the pickup menu.\n\n\n\n\nThe opening cake request is customer turn one. If the opening request already contains useful details, ask at most one open question: \"What other cake details would you like me to pass to the manager?\" If it contains no details, say: \"Cake orders are handled by my manager. What cake details would you like me to pass along?\"\n\n\n\n\nEvery caller response counts as a customer turn, including greetings, non-answers, questions, corrections, uncertainty, and fragmented speech. When customer turn two ends, do not ask, invite, offer, or request anything else. Missing name, phone, date, size, flavor, design, price, or event details are acceptable. A request such as \u201cSorry, can you repeat that?\u201d, silence, a greeting, a question, or any other non-answer is still customer turn two. Do not repeat the collection question. Immediately summarize only the details already received, say the exact manager sentence, and select Cake Request.\n\n\n\n\nOn customer turn two, summarize only what the caller actually provided, then end with exactly: \"I'll pass this request to the manager.\" Immediately select Cake Request.\n\n\n\n\nCake flavors, sizes, designs, prices, customization, feasibility, and availability are not configured. Never invent or list them. If the caller asks about them on customer turn two, say the manager will confirm them, summarize, and route without another question.\n\n\n\n\nBefore the Cake Request action succeeds, never say the request was saved, submitted, sent, passed, recorded, or accepted, and never promise a callback or follow-up.\n\n\n\n\n# CATERING REQUESTS\n\n\n\n\nCatering requests are manager requests, not pickup menu orders. Do not use the pickup menu unless the caller specifically asks about a listed item.\n\n\n\n\nThe opening catering request is customer turn one. If it already contains useful details, ask at most one open question: \"What other catering details would you like me to pass to the manager?\" If it contains no details, say: \"Catering is handled by my manager. What catering details would you like me to pass along?\"\n\n\n\n\nEvery caller response counts as a customer turn, including greetings, non-answers, questions, corrections, uncertainty, and fragmented speech. When customer turn two ends, do not ask, invite, offer, or request anything else. Missing name, phone, date, time, guest count, food preferences, or event details are acceptable. A request such as \u201cSorry, can you repeat that?\u201d, silence, a greeting, a question, or any other non-answer is still customer turn two. Do not repeat the collection question. Immediately summarize only the details already received, say the exact manager sentence, and select Catering Request.\n\n\n\n\nOn customer turn two, summarize only what the caller actually provided, then end with exactly: \"I'll pass this request to the manager.\" Immediately select Catering Request.\n\n\n\n\nNever invent a quote, price, availability, commitment, menu item, or event detail. Before the Catering Request action succeeds, never say the request was saved, submitted, sent, passed, recorded, or accepted, and never promise a callback or follow-up.\n\n\n\n\n# BROKEN OR CUT-OFF SPEECH DURING A MANAGER REQUEST\n\n\n\n\nFor ordinary manager requests, one broken or cut-off reply may be clarified once. For cake or catering, the two-turn rule still applies and overrides this section. On the second customer turn, keep the details understood, summarize, use the exact manager sentence, and route without another question or callback promise.\n\n\n\n\nA stray fragment that does not change the understood request needs no follow-up.\n\n\n\n\n# DELIVERY\n\n\n\n\nDo not take delivery orders through this phone flow. Do not collect a delivery address. Do not process menu items as a delivery order.\n\n\n\n\nIf the customer wants delivery, say warmly that delivery orders are placed on cakeworldeatery.com, then ask if they would like pickup instead. Wait for their answer and do not select a path in the same turn as the question. If yes, continue as pickup. If no, repeat cakeworldeatery.com once, thank them, and select Delivery.\n\n\n\n\n# HUMAN / MANAGER ASSISTANCE\n\n\n\n\nTransfer to restaurant staff when: the caller explicitly asks for a manager or person, a serious complaint about a previous order, a refund or charge dispute, a severe allergy needing staff confirmation, a confirmed order that cannot be found, a pickup item remains materially unclear after reasonable clarification, the caller is repeatedly asking for a real person, clear frustration after repeated misunderstandings, or a request still completely unclear after two attempts at clarifying.\n\n\n\n\nFor the first ordinary manager request, offer brief help once. Transfer immediately after a repeated request, refusal of AI help, anger, refund or charge dispute, severe allergy, or urgent safety concern. Never promise an exception, refund, or resolution. Do not say the call has been connected until transfer succeeds. If transfer fails, explain briefly and do not claim the manager was reached.\n\n\n\n\n# WHEN YOU ARE UNSURE\n\n\n\n\nIf you do not know something, say you will check with the kitchen. Never guess an item, quantity, or detail into existence. A pickup order cannot be confirmed until its items and quantities are settled. A cake or catering callback can be completed with partial details because the manager will follow up. Stay on the food order and politely redirect anything else.\n\n\n\n\n# INCOMPLETE OR DISCONNECTED ORDERS\n\n\n\n\nNever pretend an incomplete order was submitted. Preserve whatever useful information has already been obtained. If the caller says they no longer want to continue, end politely. The system may retain a summary of the incomplete call for restaurant staff \u2014 do not discuss this internal processing with the caller.\n\n\n\n\n# WRONG NUMBER\n\n\n\n\nIf the caller indicates they reached the wrong number, acknowledge briefly and end politely.\n\n\n\n\n# HOSTILE OR DO-NOT-CONTACT CALLERS\n\n\n\n\nDo not argue. Do not attempt to sell, persuade, or continue collecting information. Acknowledge the request and end the interaction politely.\n\n\n\n\n# SPEECH RECOGNITION AND MALAYALAM FOOD NAMES\n\n\n\n\nBe tolerant of pronunciation variation and mixed Malayalam-English speech. Use context before asking for clarification.\n\n\n\n\nFuzzy-match examples of the kind of vowel shifts, dropped syllables, and consonant swaps to expect \u2014 the same tolerance applies to any long or Malayalam-origin name on the actual menu, not just these items:\n\n\n\n\n-\"Kizhi Porotta\" \u2248 \"Kili Porotta\", \"Kiri Porotta\", \"Kizhi Parotta\", \"Kizhi Poratha\", \"Kili Barotta\"\n\n\n\n\n-\"Beef Ullarthu\" \u2248 \"Beef Ularthiyathu\", \"Beef Ularthiyath\", \"Beef Ulathiyathu\", \"Beef Olarthiyathu\"\n\n\n\n\n-\"Fish Pollichathu\" \u2248 \"Karimeen Pollichathu\", \"Kareemeen Pollichathu\", \"Karimin Pollichathu\", \"Curry Meen Pollichathu\"\n\n\n\n\n## Kizhi Porotta recovery\n\n\n\n\nWhen a caller is ordering food or pickup and the transcript says \"TV per order,\" \"TV parotta,\" \"TV porotta,\" \"cheesy paratha,\" \"c z paratha,\" \"Kili Porotta,\" \"Kiri Porotta,\" \"Kizhi Parotta,\" \"Kizhi Poratha,\" \"Kili Barotta,\" or a similar-sounding phrase, treat it as a possible transcription of Kizhi Porotta.\n\n\n\n\nOn the first occurrence, ask exactly, \"Did you mean Kizhi Porotta?\"\n\n\n\n\nIf the caller says yes, use the exact menu item Kizhi Porotta and continue the order. Never discuss televisions or electronics, and never suggest pizza, Cheese Pizza, burrata, kimchi, or any unrelated food for these phrases.\n\n\n\n\nIf the caller says yes to this single exact suggestion, use Kizhi Porotta and do not ask about the item again. If the caller rejects it, gives a different item name, or does not clearly confirm it, continue with the Unresolved Item Ladder. Do not silently add Kizhi Porotta.\n\n\n\n\nWhen clarification is necessary: use exact menu names, keep choices short, offer no more than three plausible alternatives. Do not treat a strange transcription as a confirmed menu item. Do not repeatedly ask for confirmation after an item has already been clearly resolved.\n\n\n\n\n# RESPONSE STYLE\n\n\n\n\nKeep spoken responses short. Normally one or two short sentences per turn. Do not mention internal reasoning. Do not expose tool names. Do not say things like \"I am checking the database,\" \"I am calling a function,\" \"I am using a tool,\" \"the model thinks,\" or similar technical language.\n\n\n\n\n# OPERATING PRINCIPLE\n\n\n\n\nUnderstand what the customer is trying to accomplish. Use the smallest useful question or suggestion. Let tools and workflow actions perform operational actions. Never claim an operational result unless the corresponding action reports success.\n\n\n\n\n# HIGH-PRIORITY SAFETY RULES\n\n\n\n\n## Dates\n\n\n\n\nUse the actual current date at call time. A month and day followed by a two-digit number is a complete date with a 20XX year: for example, \"June 20 26\" means June 20, 2026. If the caller gives a complete date including a two-digit or four-digit year and that date is already past, do not accept, save, or confirm it; explain briefly and ask once for a future date. Perform this check before the normal cake or catering opening response. If the caller does not state a year, do not invent or speak a year. Never add a weekday, change a stated year, or introduce an unsolicited pickup date. Repeat dates only as the caller provided them. The caller's latest correction always replaces the earlier date.\n\n\n\n\n## Clarification and escalation limit\n\n\n\n\nNever make more than two consecutive attempts to resolve the same unclear item or request. After the second unsuccessful answer, stop asking questions, say exactly, \u201cI\u2019m sorry we couldn\u2019t resolve that. I\u2019ll connect you to a staff member now. Please hold,\u201d and select the Manager Transfer path. For a first ordinary manager request, offer brief help once. If the caller repeats the request, declines AI help, is angry, or the matter is a refund, charge dispute, severe allergy, or urgent safety concern, stop all questions, announce the transfer, and select Manager Transfer immediately. Never offer unrelated foods while resolving an unclear item.\n\n\n\n\n## Cake and catering completion\n\n\n\n\nThe opening cake or catering request is customer turn one. You may ask one open request for details. After customer turn two, immediately summarize only what was provided, say exactly, \"I'll pass this request to the manager.\" and select Cake Request or Catering Request even when information is partial. Ask no name or detail question after turn two. Partial requests must never go to Incomplete Order. Before the request action succeeds, do not promise a callback was saved or will happen.\n\n\n\n\n## Exact Kothu Porotta rule\n\n\n\n\nPlain \u201cKothu Porotta\u201d is not a menu item. Never silently convert it to Chicken Egg Kothu Porotta and never add chicken or egg without explicit customer agreement. Say exactly, \u201cWe only have Chicken Egg Kothu Porotta. Would you like that?\u201d If the caller declines, repeats plain Kothu Porotta, or asks for a person, do not calculate or submit an order; use the clarification limit and transfer to staff.\n\n\n\n\n## Exact Kizhi Porotta recovery rule\n\n\n\n\nFor a food or pickup request, treat \"TV per order,\" \"TV parotta,\" \"TV porotta,\" \"cheesy paratha,\" \"c z paratha,\" \"Kili Porotta,\" \"Kiri Porotta,\" \"Kizhi Parotta,\" \"Kizhi Poratha,\" \"Kili Barotta,\" and close phonetic variations as possible transcriptions of Kizhi Porotta. Ask exactly, \u201cDid you mean Kizhi Porotta?\u201d If the caller confirms, use Kizhi Porotta and continue. Never discuss televisions or electronics and never suggest pizza or any unrelated food. If it remains unresolved after two attempts, use the Manager Transfer path.\n\n\n\n\n## Past-date limit\n\n\n\n\nWhen a complete date is in the past, explain it once and ask once for a future date. If the caller repeats the past date, refuses to change it, or has no future date, do not ask again and do not offer another date; immediately use the Manager Transfer path.\n\n\n\n\n## Before cake or catering action\n\n\n\n\nWhen selecting Cake Request or Catering Request, the last spoken sentence before the action must be exactly, \u201cI\u2019ll pass this request to the manager.\u201d Do not add any clause after that sentence. Before the action succeeds, never say \u201cfollow up,\u201d \u201ccall you,\u201d \u201creach out,\u201d \u201ccallback,\u201d \u201csaved,\u201d \u201csubmitted,\u201d \u201cpassed,\u201d or any equivalent promise or completed claim.\n\n\n\n# MENU REFERENCE\n\nUse this exact concise format internally: Item name, price\n\nKizhi Porotta, 16.99\nBeef Kizhi Porotta, 21.99\nKizhi Biriyani, 15.99\nFish Pollichathu, 19.99\nBeef Ullarthu, 21.99\nKarivepila Chicken, 12.99\nKallappam, 1.99\nChicken Egg Kothu Porotta, 14.99\nPorotta, 2.99\nAchayan's Fish Curry (King Fish), 14.99\nKethal Chicken Fry, 17.99\nBeef Perattu, 19.99\nThattu Dosa with Egg Omlette, 13.99\nTattu Dosa (2 piece), 2.99\nKandari Tawa Fish, 12.99\nKandari Chicken Fry, 12.99\nKandari Chicken Masala, 13.99\nKandari Paneer, 11.99\nChicken Kondattam, 12.99\nGobi Kondattam, 11.99\nChicken Mappas, 13.99\nFish Mappas, 14.99\nFish Moilee, 14.99\nMalabar Veg Kuruma, 11.99\nChettinad Veg Curry, 11.99\nChicken Chettinad Fry, 13.99\nGoat Chettinad Fry, 14.99\nChettinad Chicken Biriyani, 15.99\nChettinad Goat Biriyani, 17.99\nBeef Chettinadu Curry, 19.99\nAlleppy Shrimp Curry, 15.99\nParagon Chicken Biriyani (Kaima Rice), 15.99\nMeghana Biriyani, 15.99\nAmbur Goat Biriyani, 17.99\nMalabar Chicken Biriyani, 15.99\nMalabar Goat Biriyani, 17.99\nMalabar Fish Biriyani, 17.99\nGoat Malabar Curry, 14.99\nMalabar Chicken Curry, 13.99\nKerala Black Chana Curry, 11.99\nKerala Beef Fry, 21.99\nBengaluru Ghee Podi Dosa, 11.99\nMysore Masala Dosa, 11.99\nOnion Rawa Dosa, 11.99\nPodi Dosa, 11.99\nGhee Roast, 11.99\nMasala Dosa, 11.99\nPaneer Dosa, 12.99\nTawa Chicken Dosa, 13.99\nIdly (3) with Sambar and Chutney, 7.99\nChole Bhature, 11.99\nAloo Pappadi Chaat, 8.99\nAloo Tikki Chaat, 8.99\nKachori Chaat, 8.99\nDahi Bhel Chaat, 8.99\nDahi Puri, 9.99\nBhel Puri, 8.99\nSev Puri, 8.99\nSamosa Chaat, 8.99\nBombay Vada Pav, 9.99\nSamosa Pav, 9.99\nPav Bhaji, 9.99\nDabeli, 9.99\nDilkush, 3.49\nCut Mirchi, 9.99\nChilli Idly, 10.99\nChanna Masala, 10.99\nDal Fry, 10.99\nPaneer Saag Wala, 12.99\nPaneer Ambala, 12.99\nPaneer Kadai, 12.99\nPaneer Tikka Masala, 12.99\nPaneer Butter Masala, 12.99\nAfghani Chicken Biriyani, 15.99\nVeg Biriyani, 13.99\nEgg Biriyani, 14.99\nMasala Chai, 2.49\nMango Lassi, 5.00\nChicken 65, 12.99\nChicken 777, 12.99\nGobi Manchurian, 11.99\nChicken Manchurian, 12.99\nChilli Paneer, 11.99\nChilli Chicken, 12.99\nChicken Tikka Masala, 13.99\nButter Chicken Masala, 13.99\nChicken Shawarma, 12.99\nChicken Pepper Roast, 13.99\nGoat Pepper Roast, 14.99\nGoat Spinach, 14.99\nSpinach Chicken, 13.99\nShrimp Pepper Fry, 14.99\nShrimp Roast, 15.99\nEgg Roast, 12.99\nBeef Roast, 19.99\nBeef Pepper Masala, 19.99\nCurry Leaf Rice, 9.99\nLemon Rice, 9.99\nTomato Rice, 9.99\nCheese Pyramid Dosa, 11.99\nSpring Dosa, 11.99\nButter Chicken Dosa, 13.99\nKids Masala Dosa, 7.99\nKids Cheese Dosa, 7.99\nKids Nutella Dosa, 7.99\nOnion Beetroot Pakoda, 9.99\nSamosa, 5.99\nBang Bang Fish, 12.99\nGinger Shrimp, 14.99\nGrilled Paneer with Vegetables, 11.99\nVeg Fried Rice, 10.99\nEgg Fried Rice, 11.99\nChicken Fried Rice, 12.99\nShrimp Fried Rice, 13.99\nMix Meat Fried Rice, 14.99\nVeg Noodles, 10.99\nEgg Noodles, 11.99\nChicken Noodles, 12.99\nShrimp Noodles, 13.99\nMix Meat Noodles, 14.99\nBombay Sandwich, 9.99\nVegetable Panini, 8.99\nPaneer Tikka Panini, 9.99\nChicken Tikka Panini, 10.99\nChilli Chicken Panini, 10.99\nCakeworld Special Chicken Sandwich, 10.99\nPaneer Tikka Pizza, 10.99\nChilli Chicken Pizza, 11.99\nChicken Tikka Pizza, 11.99\nNaan, 1.99\nButter Naan, 2.49\nGarlic Naan, 2.99\nPav Bun, 2.99\nVegetable Puffs, 2.99\nPaneer Puffs, 2.99\nEgg Puffs, 3.49\nChicken Puff, 3.49\nChilli Chicken Roll, 3.49\nCoconut Bun, 2.99\nCream Bun, 3.49\nRose Milk, 5.00\nCheese Sandwich, 7.99\nCheese Pizza, 9.99\nVegetable Pizza, 9.99\nSandwich Bread, 2.99\nPastry Per Piece, 3.99\nSpecial Pastry Per Piece, 4.49\nKulfi Per Piece, 2.99\nJam Rolls, 2.99\nCup Cakes, 2.99\nCoffee, 2.99\nSoda, 1.49\nWater, 1.00",
+          "instruction_attachments": null,
+          "allow_greeting_interruption": true,
+          "intents": [
+            {
+              "id": "61fd5835-d4b9-44aa-84d9-849efffc0db8",
+              "intent_instructions": "Caller declines, refuses a required detail, cannot continue, or the order cannot be safely completed.",
+              "intent_name": "Incomplete Order",
+              "intent_speech": {
+                "intent_speech_text": "",
+                "speech_enabled": false
+              }
+            },
+            {
+              "id": "ff78d9e1-d6ad-4eb5-a5ef-c831e97a026c",
+              "intent_instructions": "Caller says this is the wrong number or not the intended caller.",
+              "intent_name": "Wrong Number",
+              "intent_speech": {
+                "intent_speech_text": "",
+                "speech_enabled": false
+              }
+            },
+            {
+              "id": "38da8877-7b43-4a1d-85c1-84195bf9edb3",
+              "intent_instructions": "Caller says they are busy or asks to complete the sample order later.",
+              "intent_name": "Busy Bad Time",
+              "intent_speech": {
+                "intent_speech_text": "",
+                "speech_enabled": false
+              }
+            },
+            {
+              "id": "7273a1c1-50c2-4b0c-9912-bd0c4d0aa828",
+              "intent_instructions": "Caller is hostile or explicitly asks not to be contacted.",
+              "intent_name": "Do Not Call",
+              "intent_speech": {
+                "intent_speech_text": "",
+                "speech_enabled": false
+              }
+            },
+            {
+              "id": "42183648-7538-4a1c-a0b6-232423002375",
+              "intent_instructions": "Caller explicitly confirms the complete summarized pickup order after hearing the review.",
+              "intent_name": "Pickup Order Confirmed",
+              "intent_speech": {
+                "intent_speech_text": "",
+                "speech_enabled": false
+              }
+            },
+            {
+              "id": "0aa95e5f-9599-4092-8086-1a0189e161a1",
+              "intent_instructions": "Caller wants to order or inquire about a cake, cake design, cake size, cake flavor, cake pricing, or a cake for an occasion. Route cake requests for manager follow-up; do not treat them as standard menu pickup orders.",
+              "intent_name": "Cake Request",
+              "intent_speech": {
+                "intent_speech_text": "",
+                "speech_enabled": false
+              }
+            },
+            {
+              "id": "0da1a635-602e-41db-994c-b12d17bf1557",
+              "intent_instructions": "Caller wants catering, a large event order, wedding food, office-party food, or food for a substantial group. Route catering requests for manager follow-up rather than standard pickup pricing.",
+              "intent_name": "Catering Request",
+              "intent_speech": {
+                "intent_speech_text": "",
+                "speech_enabled": false
+              }
+            },
+            {
+              "id": "f0d46df0-9bee-4a71-bdbf-917a31e4369e",
+              "intent_instructions": "Caller wants delivery or asks to place a delivery order. Route to the delivery website message; do not collect a delivery address in this flow.",
+              "intent_name": "Delivery",
+              "intent_speech": {
+                "intent_speech_text": "",
+                "speech_enabled": false
+              }
+            },
+            {
+              "id": "92235755-d1e6-4f52-be74-72170460510b",
+              "intent_instructions": "Caller explicitly asks for a manager, human, supervisor, or staff assistance, or needs a real person for a complaint, refund, charge dispute, severe allergy, unresolved order issue, or repeated misunderstanding. Before selecting this path, say exactly: \u2018Certainly. I\u2019ll connect you to a staff member now. Please hold.\u2019 Then route to the manager transfer.",
+              "intent_name": "Manager Transfer",
+              "intent_speech": {
+                "intent_speech_text": "",
+                "speech_enabled": false
+              }
+            }
+          ],
+          "extract_variables": [
+            {
+              "configure_data_format": false,
+              "variable_enum_values": [],
+              "variable_format_instructions": "",
+              "variable_instructions": "Extract each latest confirmed menu item using the exact menu name, along with quantity, size if stated, customization, and the listed current price. If the caller corrects an item, retain only the latest confirmed interpretation.",
+              "variable_name": "order_items",
+              "variable_type": "string"
+            },
+            {
+              "configure_data_format": false,
+              "variable_enum_values": [],
+              "variable_format_instructions": "",
+              "variable_instructions": "Extract the latest confirmed special preparation or order instructions stated by the caller. Replace a previous instruction when the caller corrects it.",
+              "variable_name": "special_instructions",
+              "variable_type": "string"
+            },
+            {
+              "configure_data_format": false,
+              "variable_enum_values": [],
+              "variable_format_instructions": "",
+              "variable_instructions": "Extract the customer's name.",
+              "variable_name": "customer_name",
+              "variable_type": "string"
+            },
+            {
+              "configure_data_format": false,
+              "variable_enum_values": [],
+              "variable_format_instructions": "",
+              "variable_instructions": "Extract the delivery address if the caller chooses delivery.",
+              "variable_name": "delivery_address",
+              "variable_type": "string"
+            },
+            {
+              "configure_data_format": false,
+              "variable_enum_values": [],
+              "variable_format_instructions": "",
+              "variable_instructions": "Extract the caller's latest confirmed choice of pickup or delivery. Preserve the latest choice if the caller changes it.",
+              "variable_name": "fulfillment_type",
+              "variable_type": "string"
+            },
+            {
+              "configure_data_format": false,
+              "variable_enum_values": [],
+              "variable_format_instructions": "",
+              "variable_instructions": "Classify the customer's request. Must be one of: pickup, cake, catering, delivery, manager, other.",
+              "variable_name": "request_type",
+              "variable_type": "string"
+            },
+            {
+              "configure_data_format": false,
+              "variable_enum_values": [],
+              "variable_format_instructions": "",
+              "variable_instructions": "Set to true only after the customer explicitly confirms a complete pickup order. Set to false if the order is incomplete, only discussed, changed, or not explicitly confirmed.",
+              "variable_name": "order_confirmed",
+              "variable_type": "string"
+            },
+            {
+              "configure_data_format": false,
+              "variable_enum_values": [],
+              "variable_format_instructions": "",
+              "variable_instructions": "Set to true if the customer asks for a manager, human, supervisor, complaint handling, exception, or help beyond the AI agent. Otherwise false.",
+              "variable_name": "manager_required",
+              "variable_type": "string"
+            },
+            {
+              "configure_data_format": false,
+              "variable_enum_values": [],
+              "variable_format_instructions": "",
+              "variable_instructions": "Write a concise summary of the customer's cake, catering, manager, or incomplete request, including key details already provided.",
+              "variable_name": "request_summary",
+              "variable_type": "string"
+            },
+            {
+              "configure_data_format": false,
+              "variable_enum_values": [],
+              "variable_format_instructions": "",
+              "variable_instructions": "Output the exact JSON array from the calculate_restaurant_order_total tool result's \"line_items\" field, verbatim, as a JSON array string. Do not summarize or reformat it. Example: [{\"item_name\":\"Kizhi Porotta\",\"quantity\":1,\"unit_price\":\"16.99\",\"line_total\":\"16.99\"}]",
+              "variable_name": "line_items",
+              "variable_type": "string"
+            },
+            {
+              "configure_data_format": false,
+              "variable_enum_values": [],
+              "variable_format_instructions": "",
+              "variable_instructions": "Output the exact \"grand_total\" string from the calculate_restaurant_order_total tool result, verbatim. Example: \"16.99\"",
+              "variable_name": "grand_total",
+              "variable_type": "string"
+            },
+            {
+              "configure_data_format": false,
+              "variable_enum_values": [],
+              "variable_format_instructions": "",
+              "variable_instructions": "After the caller explicitly confirms the latest complete pickup order,\nextract one JSON object containing ALL these fields:\n\ncustomer_name: the actual customer's name\nfulfillment_type: \"pickup\"\nline_items: an array containing every confirmed item, each with:\n  item_name: exact menu name\n  quantity: positive integer\n  unit_price: numeric menu price, without quotation marks\ngrand_total: calculated total as a string with two decimal places\n\nUse the latest corrected order and calculator result.\nDo not include line_total, call_uuid, caller, or additional fields.\nDo not copy example customer details or example items.\nDo not include Markdown, explanations, or manually escaped JSON.\nDo not speak this JSON aloud.\n\nIf confirmation or required information is missing, output an empty\nstring. Never invent missing information to satisfy the format.",
+              "variable_name": "final_order_json",
+              "variable_type": "string"
+            }
+          ],
+          "actions": [
+            {
+              "action_name": null,
+              "action_instructions": null,
+              "action_type": "CUSTOM_CODE",
+              "code_body": "def main(line_items: list) -> dict:\n    \"\"\"Calculate order totals for a restaurant voice agent from supplied line items.\n\n    Accepts a list of line items, validates all inputs, computes line totals and\n    a grand total using integer-cent arithmetic to avoid floating-point errors,\n    and returns a structured result with all monetary values formatted as strings\n    with exactly two decimal places.\n\n    Parameters:\n        line_items: A list of dictionaries, each containing:\n            - item_name (str): The exact menu item name.\n            - unit_price (int or float): The unit price in US dollars (must be positive).\n            - quantity (int): The quantity ordered (must be a positive integer).\n\n    Returns:\n        A dictionary with:\n            - line_items: A list of dicts each with item_name, quantity, unit_price,\n              and line_total (monetary values as two-decimal-place strings).\n            - grand_total: The grand total as a two-decimal-place string.\n    \"\"\"\n    if not isinstance(line_items, list):\n        raise ValueError(\"line_items must be a list.\")\n    if len(line_items) == 0:\n        raise ValueError(\"line_items must not be empty.\")\n\n    def _to_cents(dollar_value: float) -> int:\n        return round(dollar_value * 100)\n\n    def _format_dollars(cents: int) -> str:\n        sign = \"-\" if cents < 0 else \"\"\n        abs_cents = abs(cents)\n        return f\"{sign}{abs_cents // 100}.{abs_cents % 100:02d}\"\n\n    grand_total_cents = 0\n    result_items = []\n    for idx, item in enumerate(line_items):\n        if not isinstance(item, dict):\n            raise ValueError(f\"Line item at index {idx} must be a dictionary.\")\n        item_name = item.get(\"item_name\")\n        if not isinstance(item_name, str) or not item_name.strip():\n            raise ValueError(f\"Line item at index {idx} has an invalid item_name.\")\n        unit_price = item.get(\"unit_price\")\n        if isinstance(unit_price, bool) or not isinstance(unit_price, (int, float)) or unit_price <= 0:\n            raise ValueError(f\"Line item at index {idx} has an invalid unit_price.\")\n        quantity = item.get(\"quantity\")\n        if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:\n            raise ValueError(f\"Line item at index {idx} has an invalid quantity.\")\n        unit_price_cents = _to_cents(unit_price)\n        line_total_cents = unit_price_cents * quantity\n        grand_total_cents += line_total_cents\n        result_items.append({\"item_name\": item_name.strip(), \"quantity\": quantity, \"unit_price\": _format_dollars(unit_price_cents), \"line_total\": _format_dollars(line_total_cents)})\n    return {\"line_items\": result_items, \"grand_total\": _format_dollars(grand_total_cents)}\n",
+              "code_description": "Calculates restaurant line totals and grand total from confirmed menu prices and quantities.",
+              "code_function_schema": {
+                "description": "Calculates restaurant line totals and grand total from confirmed menu prices and quantities.",
+                "name": "calculate_restaurant_order_total",
+                "parameters": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_items": {
+                      "description": "A list of line item objects, each containing item_name (str), unit_price (number, positive, in US dollars), and quantity (integer, positive).",
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "item_name": {
+                            "description": "The exact menu item name.",
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "description": "The quantity ordered. Must be a positive integer.",
+                            "type": "integer"
+                          },
+                          "unit_price": {
+                            "description": "The unit price in US dollars. Must be positive.",
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "item_name",
+                          "unit_price",
+                          "quantity"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "line_items"
+                  ],
+                  "type": "object"
+                },
+                "strict": true
+              },
+              "code_name": "calculate_restaurant_order_total",
+              "id": "b904a6d7-e743-4e92-ab9b-2cee3ca1f903"
+            }
+          ],
+          "screening_name": null,
+          "screening_reason": null,
+          "initial_wait_time": 0
+        }
+      }
+    },
+    {
+      "id": "ef824d3a-3ffd-474c-827d-80459c12fe63",
+      "type": "end_conversation",
+      "data": {
+        "meta": {
+          "name": "End conversation"
+        },
+        "_meta": null,
+        "config": {
+          "name": "Call Later",
+          "description": "",
+          "end_message": "Acknowledge that this is not a good time and say goodbye without promising a callback."
+        }
+      }
+    },
+    {
+      "id": "f7871a94-5509-4b82-9cb7-5eae519eae3f",
+      "type": "end_conversation",
+      "data": {
+        "meta": {
+          "name": "End conversation"
+        },
+        "_meta": null,
+        "config": {
+          "name": "Cake Save Failed",
+          "description": "",
+          "end_message": "Apologize briefly that the cake request could not be saved. Ask the caller to contact the restaurant directly, then thank them and say goodbye. Do not promise a callback."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "c3d2dc79-2c54-4bf5-bb27-ab2375a334c9",
+      "source": "8dcfa06b-b8d8-496c-a56e-7e658f2f5f6e",
+      "target": "dcba1388-0126-4bd4-bc81-40891313912a",
+      "sourceHandle": "call",
+      "data": {
+        "nodeVars": [
+          "{{Start.request_type}}",
+          "{{Start.flow_run_id}}",
+          "{{Start.call.uuid}}",
+          "{{Start.call.to}}",
+          "{{Start.call.from}}",
+          "{{Start.call.direction}}",
+          "{{Start.call.to_iso2}}",
+          "{{Start.call.from_iso2}}",
+          "{{Start.call.to_country}}",
+          "{{Start.call.from_country}}",
+          "{{Start.call.leg}}",
+          "{{Start.call.bill_rate}}",
+          "{{Start.call.header1}}",
+          "{{Start.call.header2}}",
+          "{{Start.call.header3}}",
+          "{{Start.call.header4}}",
+          "{{Start.call.header5}}",
+          "{{Start.call.header6}}",
+          "{{Start.call.conversation_id}}",
+          "{{Start.call.conversation_url}}"
+        ]
+      }
+    },
+    {
+      "id": "10601066-be32-4fdb-ae20-56da0cde6075",
+      "source": "dcba1388-0126-4bd4-bc81-40891313912a",
+      "target": "cc37f8d3-ae0f-49d0-b9c0-23c827a4f852",
+      "sourceHandle": "61fd5835-d4b9-44aa-84d9-849efffc0db8",
+      "data": {
+        "nodeVars": [
+          "{{Pickup Order Guide.order_items}}",
+          "{{Pickup Order Guide.special_instructions}}",
+          "{{Pickup Order Guide.customer_name}}",
+          "{{Pickup Order Guide.delivery_address}}",
+          "{{Pickup Order Guide.fulfillment_type}}",
+          "{{Pickup Order Guide.request_type}}",
+          "{{Pickup Order Guide.order_confirmed}}",
+          "{{Pickup Order Guide.manager_required}}",
+          "{{Pickup Order Guide.request_summary}}",
+          "{{Pickup Order Guide.line_items}}",
+          "{{Pickup Order Guide.grand_total}}",
+          "{{Pickup Order Guide.final_order_json}}"
+        ]
+      }
+    },
+    {
+      "id": "cd9f56ad-e1c4-41cc-9950-6c62dffb068a",
+      "source": "dcba1388-0126-4bd4-bc81-40891313912a",
+      "target": "9e8ca257-507d-4769-9a45-afdce772f0e1",
+      "sourceHandle": "ff78d9e1-d6ad-4eb5-a5ef-c831e97a026c",
+      "data": {
+        "nodeVars": [
+          "{{Pickup Order Guide.order_items}}",
+          "{{Pickup Order Guide.special_instructions}}",
+          "{{Pickup Order Guide.customer_name}}",
+          "{{Pickup Order Guide.delivery_address}}",
+          "{{Pickup Order Guide.fulfillment_type}}",
+          "{{Pickup Order Guide.request_type}}",
+          "{{Pickup Order Guide.order_confirmed}}",
+          "{{Pickup Order Guide.manager_required}}",
+          "{{Pickup Order Guide.request_summary}}",
+          "{{Pickup Order Guide.line_items}}",
+          "{{Pickup Order Guide.grand_total}}",
+          "{{Pickup Order Guide.final_order_json}}"
+        ],
+        "isHovered": false
+      },
+      "selected": false
+    },
+    {
+      "id": "f2e9bda2-451c-4c4b-9dbb-2340e5facf19",
+      "source": "dcba1388-0126-4bd4-bc81-40891313912a",
+      "target": "1f38cda5-9eb4-4a09-86c3-485a2cb892ce",
+      "sourceHandle": "7273a1c1-50c2-4b0c-9912-bd0c4d0aa828",
+      "data": {
+        "nodeVars": [
+          "{{Pickup Order Guide.order_items}}",
+          "{{Pickup Order Guide.special_instructions}}",
+          "{{Pickup Order Guide.customer_name}}",
+          "{{Pickup Order Guide.delivery_address}}",
+          "{{Pickup Order Guide.fulfillment_type}}",
+          "{{Pickup Order Guide.request_type}}",
+          "{{Pickup Order Guide.order_confirmed}}",
+          "{{Pickup Order Guide.manager_required}}",
+          "{{Pickup Order Guide.request_summary}}",
+          "{{Pickup Order Guide.line_items}}",
+          "{{Pickup Order Guide.grand_total}}",
+          "{{Pickup Order Guide.final_order_json}}"
+        ]
+      }
+    },
+    {
+      "id": "c1f8e6c4-acd9-41f8-b3aa-6a75f512473d",
+      "source": "dcba1388-0126-4bd4-bc81-40891313912a",
+      "target": "ef824d3a-3ffd-474c-827d-80459c12fe63",
+      "sourceHandle": "38da8877-7b43-4a1d-85c1-84195bf9edb3",
+      "data": {
+        "nodeVars": [
+          "{{Pickup Order Guide.order_items}}",
+          "{{Pickup Order Guide.special_instructions}}",
+          "{{Pickup Order Guide.customer_name}}",
+          "{{Pickup Order Guide.delivery_address}}",
+          "{{Pickup Order Guide.fulfillment_type}}",
+          "{{Pickup Order Guide.request_type}}",
+          "{{Pickup Order Guide.order_confirmed}}",
+          "{{Pickup Order Guide.manager_required}}",
+          "{{Pickup Order Guide.request_summary}}",
+          "{{Pickup Order Guide.line_items}}",
+          "{{Pickup Order Guide.grand_total}}",
+          "{{Pickup Order Guide.final_order_json}}"
+        ]
+      }
+    },
+    {
+      "id": "b58b1cd7-299d-4283-b644-c7363121b727",
+      "source": "dcba1388-0126-4bd4-bc81-40891313912a",
+      "target": "3103e3f2-c986-48a1-9000-52e8b406694f",
+      "sourceHandle": "42183648-7538-4a1c-a0b6-232423002375",
+      "data": {
+        "nodeVars": [
+          "{{Pickup Order Guide.order_items}}",
+          "{{Pickup Order Guide.special_instructions}}",
+          "{{Pickup Order Guide.customer_name}}",
+          "{{Pickup Order Guide.delivery_address}}",
+          "{{Pickup Order Guide.fulfillment_type}}",
+          "{{Pickup Order Guide.request_type}}",
+          "{{Pickup Order Guide.order_confirmed}}",
+          "{{Pickup Order Guide.manager_required}}",
+          "{{Pickup Order Guide.request_summary}}",
+          "{{Pickup Order Guide.line_items}}",
+          "{{Pickup Order Guide.grand_total}}",
+          "{{Pickup Order Guide.final_order_json}}"
+        ],
+        "isHovered": false
+      }
+    },
+    {
+      "id": "6af593bf-b931-4174-8d0f-1dc895a6dcf1",
+      "source": "3103e3f2-c986-48a1-9000-52e8b406694f",
+      "target": "33ebee94-24b1-4752-ac9f-8a4a62bd53c9",
+      "sourceHandle": "success",
+      "data": {
+        "nodeVars": [
+          "{{Submit Pickup Request.content_type}}",
+          "{{Submit Pickup Request.response}}",
+          "{{Submit Pickup Request.status_code}}",
+          "{{Submit Pickup Request.response}}",
+          "{{Submit Pickup Request.response.detail}}"
+        ]
+      }
+    },
+    {
+      "id": "b4ad9a57-24c0-4e06-b1da-443f095639ca",
+      "source": "3103e3f2-c986-48a1-9000-52e8b406694f",
+      "target": "4606ef7d-cbd0-4a96-a529-798a118e96db",
+      "sourceHandle": "failed",
+      "data": {
+        "nodeVars": [
+          "{{Submit Pickup Request.content_type}}",
+          "{{Submit Pickup Request.response}}",
+          "{{Submit Pickup Request.status_code}}",
+          "{{Submit Pickup Request.response}}",
+          "{{Submit Pickup Request.response.detail}}"
+        ]
+      }
+    },
+    {
+      "id": "4a301b19-6d6d-4769-92d5-0c7017665e4f",
+      "source": "dcba1388-0126-4bd4-bc81-40891313912a",
+      "target": "2e6bc775-ff0d-4d45-a01e-86f40e491761",
+      "sourceHandle": "0aa95e5f-9599-4092-8086-1a0189e161a1",
+      "data": {
+        "nodeVars": [
+          "{{Pickup Order Guide.order_items}}",
+          "{{Pickup Order Guide.special_instructions}}",
+          "{{Pickup Order Guide.customer_name}}",
+          "{{Pickup Order Guide.delivery_address}}",
+          "{{Pickup Order Guide.fulfillment_type}}",
+          "{{Pickup Order Guide.request_type}}",
+          "{{Pickup Order Guide.order_confirmed}}",
+          "{{Pickup Order Guide.manager_required}}",
+          "{{Pickup Order Guide.request_summary}}",
+          "{{Pickup Order Guide.line_items}}",
+          "{{Pickup Order Guide.grand_total}}",
+          "{{Pickup Order Guide.final_order_json}}"
+        ]
+      }
+    },
+    {
+      "id": "0a546eab-b0ca-4823-b986-4e7de4c87791",
+      "source": "dcba1388-0126-4bd4-bc81-40891313912a",
+      "target": "4d236cfb-5979-4fbf-98a6-c4d8698e7cf1",
+      "sourceHandle": "f0d46df0-9bee-4a71-bdbf-917a31e4369e",
+      "data": {
+        "nodeVars": [
+          "{{Pickup Order Guide.order_items}}",
+          "{{Pickup Order Guide.special_instructions}}",
+          "{{Pickup Order Guide.customer_name}}",
+          "{{Pickup Order Guide.delivery_address}}",
+          "{{Pickup Order Guide.fulfillment_type}}",
+          "{{Pickup Order Guide.request_type}}",
+          "{{Pickup Order Guide.order_confirmed}}",
+          "{{Pickup Order Guide.manager_required}}",
+          "{{Pickup Order Guide.request_summary}}",
+          "{{Pickup Order Guide.line_items}}",
+          "{{Pickup Order Guide.grand_total}}",
+          "{{Pickup Order Guide.final_order_json}}"
+        ]
+      }
+    },
+    {
+      "id": "8cb59568-e16e-4e62-896c-78e1a3a9da3b",
+      "source": "dcba1388-0126-4bd4-bc81-40891313912a",
+      "target": "6e83c259-296d-407f-824a-3be1ec16f4ed",
+      "sourceHandle": "92235755-d1e6-4f52-be74-72170460510b",
+      "data": {
+        "nodeVars": [
+          "{{Pickup Order Guide.order_items}}",
+          "{{Pickup Order Guide.special_instructions}}",
+          "{{Pickup Order Guide.customer_name}}",
+          "{{Pickup Order Guide.delivery_address}}",
+          "{{Pickup Order Guide.fulfillment_type}}",
+          "{{Pickup Order Guide.request_type}}",
+          "{{Pickup Order Guide.order_confirmed}}",
+          "{{Pickup Order Guide.manager_required}}",
+          "{{Pickup Order Guide.request_summary}}",
+          "{{Pickup Order Guide.line_items}}",
+          "{{Pickup Order Guide.grand_total}}",
+          "{{Pickup Order Guide.final_order_json}}"
+        ],
+        "isHovered": false
+      }
+    },
+    {
+      "id": "e8e57918-fb12-4c48-952f-a64af445e2e0",
+      "source": "2e6bc775-ff0d-4d45-a01e-86f40e491761",
+      "target": "971479b2-317a-4293-9b75-7bd60e0e516d",
+      "sourceHandle": "success",
+      "data": {
+        "nodeVars": [
+          "{{Send Cake Manager Request.content_type}}",
+          "{{Send Cake Manager Request.response}}",
+          "{{Send Cake Manager Request.status_code}}",
+          "{{Send Cake Manager Request.response}}"
+        ],
+        "isHovered": false
+      }
+    },
+    {
+      "id": "a255af89-0984-4c79-88ca-b38f7574d6a6",
+      "source": "2e6bc775-ff0d-4d45-a01e-86f40e491761",
+      "target": "f7871a94-5509-4b82-9cb7-5eae519eae3f",
+      "sourceHandle": "failed",
+      "data": {
+        "nodeVars": [
+          "{{Send Cake Manager Request.content_type}}",
+          "{{Send Cake Manager Request.response}}",
+          "{{Send Cake Manager Request.status_code}}",
+          "{{Send Cake Manager Request.response}}"
+        ],
+        "isHovered": false
+      }
+    },
+    {
+      "id": "0aa95e5f-9599-4092-8086-1a0189e161a1",
+      "source": "875e1e7e-60fb-4086-844e-dcfb92267800",
+      "target": "37a03f3c-4f7f-4c66-8959-37c738ae3b03",
+      "sourceHandle": "failed",
+      "data": {
+        "nodeVars": [
+          "{{Send Catering Manager Request.content_type}}",
+          "{{Send Catering Manager Request.response}}",
+          "{{Send Catering Manager Request.status_code}}",
+          "{{Send Catering Manager Request.response}}"
+        ]
+      }
+    },
+    {
+      "id": "0da1a635-602e-41db-994c-b12d17bf1557",
+      "source": "6e83c259-296d-407f-824a-3be1ec16f4ed",
+      "target": "704638f4-f512-4dc4-ad8b-10c19ca63f22",
+      "sourceHandle": "completed",
+      "data": {
+        "nodeVars": [
+          "{{Transfer to Manager.uuid}}",
+          "{{Transfer to Manager.to}}",
+          "{{Transfer to Manager.from}}",
+          "{{Transfer to Manager.direction}}",
+          "{{Transfer to Manager.from_iso2}}",
+          "{{Transfer to Manager.from_country}}",
+          "{{Transfer to Manager.dial_status}}"
+        ]
+      }
+    },
+    {
+      "id": "72624e32-fd0e-4eb8-b270-a846f6340cc8",
+      "source": "6e83c259-296d-407f-824a-3be1ec16f4ed",
+      "target": "704638f4-f512-4dc4-ad8b-10c19ca63f22",
+      "sourceHandle": "no_answer",
+      "data": {
+        "nodeVars": [
+          "{{Transfer to Manager.uuid}}",
+          "{{Transfer to Manager.to}}",
+          "{{Transfer to Manager.from}}",
+          "{{Transfer to Manager.direction}}",
+          "{{Transfer to Manager.from_iso2}}",
+          "{{Transfer to Manager.from_country}}",
+          "{{Transfer to Manager.dial_status}}"
+        ]
+      }
+    },
+    {
+      "id": "f55e882d-3905-4e4d-8a94-cadd247495d7",
+      "source": "6e83c259-296d-407f-824a-3be1ec16f4ed",
+      "target": "704638f4-f512-4dc4-ad8b-10c19ca63f22",
+      "sourceHandle": "busy_rejected",
+      "data": {
+        "nodeVars": [
+          "{{Transfer to Manager.uuid}}",
+          "{{Transfer to Manager.to}}",
+          "{{Transfer to Manager.from}}",
+          "{{Transfer to Manager.direction}}",
+          "{{Transfer to Manager.from_iso2}}",
+          "{{Transfer to Manager.from_country}}",
+          "{{Transfer to Manager.dial_status}}"
+        ]
+      }
+    },
+    {
+      "id": "213356b6-ac49-44ec-bbb8-df8cc93ca666",
+      "source": "6e83c259-296d-407f-824a-3be1ec16f4ed",
+      "target": "704638f4-f512-4dc4-ad8b-10c19ca63f22",
+      "sourceHandle": "failed",
+      "data": {
+        "nodeVars": [
+          "{{Transfer to Manager.uuid}}",
+          "{{Transfer to Manager.to}}",
+          "{{Transfer to Manager.from}}",
+          "{{Transfer to Manager.direction}}",
+          "{{Transfer to Manager.from_iso2}}",
+          "{{Transfer to Manager.from_country}}",
+          "{{Transfer to Manager.dial_status}}"
+        ]
+      }
+    },
+    {
+      "id": "2c43d255-745f-4e21-9311-c4d17959fa60",
+      "source": "875e1e7e-60fb-4086-844e-dcfb92267800",
+      "target": "4babf5f5-5446-4e8e-b88c-c7c659bb447a",
+      "sourceHandle": "success",
+      "data": {
+        "nodeVars": [
+          "{{Send Catering Manager Request.content_type}}",
+          "{{Send Catering Manager Request.response}}",
+          "{{Send Catering Manager Request.status_code}}",
+          "{{Send Catering Manager Request.response}}"
+        ],
+        "isHovered": false
+      }
+    },
+    {
+      "id": "91b0beb9-3bd7-4d53-8f24-2fed0cf1e02d",
+      "source": "875e1e7e-60fb-4086-844e-dcfb92267800",
+      "target": "37a03f3c-4f7f-4c66-8959-37c738ae3b03",
+      "sourceHandle": "failed",
+      "data": {
+        "nodeVars": [
+          "{{Send Catering Manager Request.content_type}}",
+          "{{Send Catering Manager Request.response}}",
+          "{{Send Catering Manager Request.status_code}}",
+          "{{Send Catering Manager Request.response}}"
+        ]
+      }
+    },
+    {
+      "id": "9725b383-5e9a-4d82-a4f4-36ed3748c1d5",
+      "source": "6e83c259-296d-407f-824a-3be1ec16f4ed",
+      "target": "704638f4-f512-4dc4-ad8b-10c19ca63f22",
+      "sourceHandle": "failed",
+      "data": {
+        "nodeVars": [
+          "{{Transfer to Manager.uuid}}",
+          "{{Transfer to Manager.to}}",
+          "{{Transfer to Manager.from}}",
+          "{{Transfer to Manager.direction}}",
+          "{{Transfer to Manager.from_iso2}}",
+          "{{Transfer to Manager.from_country}}",
+          "{{Transfer to Manager.dial_status}}"
+        ]
+      }
+    },
+    {
+      "id": "2b21a6d3-8c6b-4bd7-80c9-aba1f063262e",
+      "source": "6e83c259-296d-407f-824a-3be1ec16f4ed",
+      "target": "443f9e65-4c77-42d0-91c3-1cb7c2791eac",
+      "sourceHandle": "completed",
+      "data": {
+        "nodeVars": [
+          "{{Transfer to Manager.uuid}}",
+          "{{Transfer to Manager.to}}",
+          "{{Transfer to Manager.from}}",
+          "{{Transfer to Manager.direction}}",
+          "{{Transfer to Manager.from_iso2}}",
+          "{{Transfer to Manager.from_country}}",
+          "{{Transfer to Manager.dial_status}}"
+        ]
+      }
+    },
+    {
+      "id": "730491e2-f178-4fdc-873c-4a62b904d440",
+      "source": "dcba1388-0126-4bd4-bc81-40891313912a",
+      "target": "875e1e7e-60fb-4086-844e-dcfb92267800",
+      "sourceHandle": "0da1a635-602e-41db-994c-b12d17bf1557",
+      "data": {
+        "nodeVars": [
+          "{{Pickup Order Guide.order_items}}",
+          "{{Pickup Order Guide.special_instructions}}",
+          "{{Pickup Order Guide.customer_name}}",
+          "{{Pickup Order Guide.delivery_address}}",
+          "{{Pickup Order Guide.fulfillment_type}}",
+          "{{Pickup Order Guide.request_type}}",
+          "{{Pickup Order Guide.order_confirmed}}",
+          "{{Pickup Order Guide.manager_required}}",
+          "{{Pickup Order Guide.request_summary}}",
+          "{{Pickup Order Guide.line_items}}",
+          "{{Pickup Order Guide.grand_total}}",
+          "{{Pickup Order Guide.final_order_json}}"
+        ],
+        "isHovered": false
+      }
+    }
+  ],
+  "systemPrompt": null,
+  "sttGuidance": null,
+  "agentName": "Restaurant Order Assistant",
+  "agentPersona": "Warm, clear, patient, and concise. Guides callers through a realistic sample restaurant order without claiming that a real order or payment was submitted.",
+  "conversationGoals": [
+    {
+      "goal_name": "Pickup order placed",
+      "goal_instructions": "The call is successful when the customer confirms a pickup food order and CakeWorld has the order details needed to prepare it, including the items, quantities, customer name if available, and the final total."
+    }
+  ],
+  "agentSettings": {
+    "schedule": {
+      "timezone": "America/New_York"
+    },
+    "knowledge_base_ids": [
+      "fd20e9fc-7567-42f5-a43c-5582f8ba2343"
+    ],
+    "voice_ai_config": {
+      "language": "en-IN",
+      "text_to_speech": {
+        "provider": "elevenlabs",
+        "model": "eleven_turbo_v2_5",
+        "voice": "ack0QsRaQyDLnVyMQTSd",
+        "voice_label": "Ananya",
+        "pronunciation": []
+      },
+      "speech_to_text": {
+        "provider": "deepgram",
+        "model": "nova-3",
+        "keyterms": [
+          "Kizhi Porotta",
+          "Kizhi",
+          "Porotta",
+          "Biriyani",
+          "Pollichathu",
+          "meen Pollichathu",
+          "fish Pollichathu",
+          "Beef Ullarthu",
+          "Karivepila",
+          "Kallappam",
+          "Kothu Porotta",
+          "Achayan",
+          "Kethal",
+          "nadan",
+          "Perattu",
+          "Thattu Dosa",
+          "Kandari",
+          "Mappas",
+          "Kondattam",
+          "Moilee",
+          "Chettinadu",
+          "Alleppy",
+          "Alapuzha",
+          "Kaima",
+          "Meghana",
+          "Kachori",
+          "mutta",
+          "kadala",
+          "thoran",
+          "avial",
+          "mizhikuparatti",
+          "mathanga",
+          "achaar",
+          "manga",
+          "Dilkush",
+          "peera",
+          "pachadi",
+          "payasam",
+          "pups"
+        ]
+      },
+      "user_idle_config": {
+        "hangup_msg": "Since I'm not hearing a response, I'll go ahead and disconnect the call. If you need further assistance, please don't hesitate to contact us again.",
+        "hold_timeout": 30,
+        "idling_timeout": 155,
+        "reminder_msg": "Are you still there? I'm happy to assist whenever you're ready",
+        "retries": 3
+      },
+      "allow_greeting_interruption": true,
+      "background_audio": {
+        "type": "nature_morning",
+        "volume": 1,
+        "thinking_sound_enabled": true,
+        "thinking_sound_volume": 0.7
+      }
+    },
+    "event_callbacks": {
+      "HANGUP": {
+        "url": "https://cakeworld.neuroheart.ai/plivo-agent/plivo/events/call-ended",
+        "method": "POST",
+        "auth": "no_auth",
+        "username": "",
+        "password": "",
+        "token": "",
+        "type": "url"
+      },
+      "RECORDING": {
+        "url": "https://cakeworld.neuroheart.ai/plivo-agent/plivo/events/recording",
+        "method": "POST",
+        "auth": "no_auth",
+        "username": "",
+        "password": "",
+        "token": "",
+        "transcription": true
+      },
+      "ERROR": {
+        "url": "https://cakeworld.neuroheart.ai/plivo-agent/plivo/events/error",
+        "method": "POST",
+        "auth": "no_auth",
+        "username": "",
+        "password": "",
+        "token": ""
+      },
+      "SMS_STATUS": {
+        "url": "",
+        "method": "POST",
+        "auth": "no_auth",
+        "username": "",
+        "password": "",
+        "token": ""
+      },
+      "WHATSAPP_STATUS": {
+        "url": "",
+        "method": "POST",
+        "auth": "no_auth",
+        "username": "",
+        "password": "",
+        "token": ""
+      },
+      "CONVERSATION_CLOSURE": {
+        "url": "",
+        "method": "POST",
+        "auth": "no_auth",
+        "username": "",
+        "password": "",
+        "token": ""
+      }
+    },
+    "conversation_goals": [
+      {
+        "goal_name": "Pickup order placed",
+        "goal_instructions": "The call is successful when the customer confirms a pickup food order and CakeWorld has the order details needed to prepare it, including the items, quantities, customer name if available, and the final total."
+      }
+    ],
+    "sub_auth_id": null
+  }
+}
