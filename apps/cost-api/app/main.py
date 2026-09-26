@@ -35,6 +35,7 @@ from cost_engine import PriceBookLookup, RateNotFoundError, calculate_cost
 
 from anomalies import scan_and_record
 from price_check import reconcile_prices
+from elevenlabs_poller import poll_once as poll_elevenlabs_once
 from telephony_poller import poll_once as poll_telephony_once
 
 logger = logging.getLogger(__name__)
@@ -58,6 +59,14 @@ COST_API_SELF_URL = os.getenv("COST_API_SELF_URL", "http://127.0.0.1:8000")
 # must match telephony's own DASHBOARD_API_KEY, deliberately a separate secret
 # from COST_INGEST_SECRET (see telephony_poller.py).
 TELEPHONY_API_KEY = os.getenv("TELEPHONY_API_KEY", "").strip()
+
+# Same off-by-default pattern -- empty until 11agent_repo is deployed somewhere
+# reachable; the job below never runs until this is set to a real URL.
+ELEVENLABS_AGENT_URL = os.getenv("ELEVENLABS_AGENT_URL", "").strip()
+ELEVENLABS_POLL_INTERVAL_SECONDS = int(os.getenv("ELEVENLABS_POLL_INTERVAL_SECONDS", "60"))
+# 11agent_repo's own dashboard-auth secret (ELEVENLABS_AGENT_API_KEY there) --
+# distinct from COST_INGEST_SECRET, same reasoning as TELEPHONY_API_KEY above.
+ELEVENLABS_AGENT_API_KEY = os.getenv("ELEVENLABS_AGENT_API_KEY", "").strip()
 
 # Phase 1, per the lead: keep this simple — a flat monthly constant, not a
 # fixed-costs table. Revisit if more than just the server needs tracking.
@@ -96,6 +105,17 @@ def _run_telephony_poll() -> None:
         logger.exception("telephony cost poll failed")
 
 
+def _run_elevenlabs_poll() -> None:
+    try:
+        result = poll_elevenlabs_once(
+            elevenlabs_url=ELEVENLABS_AGENT_URL, cost_api_url=COST_API_SELF_URL, secret=COST_INGEST_SECRET,
+            elevenlabs_api_key=ELEVENLABS_AGENT_API_KEY,
+        )
+        logger.info("elevenlabs cost poll: %s", result)
+    except Exception:
+        logger.exception("elevenlabs cost poll failed")
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     _scheduler.add_job(_run_nightly_scan, "cron", hour=ANOMALY_SCAN_HOUR_UTC, id="nightly_anomaly_scan")
@@ -107,6 +127,11 @@ async def lifespan(_app: FastAPI):
         _scheduler.add_job(
             _run_telephony_poll, "interval",
             seconds=TELEPHONY_POLL_INTERVAL_SECONDS, id="telephony_cost_poll",
+        )
+    if ELEVENLABS_AGENT_URL:
+        _scheduler.add_job(
+            _run_elevenlabs_poll, "interval",
+            seconds=ELEVENLABS_POLL_INTERVAL_SECONDS, id="elevenlabs_cost_poll",
         )
     _scheduler.start()
     yield
@@ -170,7 +195,7 @@ class UsageEventIn(BaseModel):
     event_id: str
     call_id: str
     restaurant_id: int
-    stage: str  # stt | llm | tts | telephony
+    stage: str  # stt | llm | tts | telephony | voice_agent
     provider: str
     model: str
     billing_unit: str

@@ -157,3 +157,18 @@ class TestCalculateCostDispatch:
 
         with pytest.raises(RateNotFoundError):
             calculate_cost(_RaisingLookup(), stage="llm", provider="x", model="y", billing_unit="z")
+
+    def test_voice_agent_stage_returns_quantity_verbatim_with_no_rate_lookup(self):
+        class _RaisingLookup(PriceBookLookup):
+            def __init__(self):
+                pass
+
+            def get_rate(self, **kwargs):
+                raise RateNotFoundError("must not be called for voice_agent")
+
+        cost, rate_id = calculate_cost(
+            _RaisingLookup(), stage="voice_agent", provider="elevenlabs", model="gpt-5.6-luna",
+            billing_unit="call", quantity=Decimal("0.1810"),
+        )
+        assert cost == Decimal("0.181000")
+        assert rate_id is None

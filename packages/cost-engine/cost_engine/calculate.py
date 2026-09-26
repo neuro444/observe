@@ -6,6 +6,7 @@ many transactions).
 from __future__ import annotations
 
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Optional
 
 from .rates import PriceBookLookup, PriceBookRate
 
@@ -79,10 +80,18 @@ def calculate_cost(
     characters: int = 0,
     audio_seconds: Decimal = Decimal("0"),
     quantity: Decimal = Decimal("0"),  # generic unit count (minutes/messages) for telephony
-) -> tuple[Decimal, int]:
+) -> tuple[Decimal, Optional[int]]:
     """Dispatch to the right formula and return (cost, price_book_id_used) —
     the price_version_id gets stored on the usage_events row so a later rate
-    change never silently rewrites a past estimate."""
+    change never silently rewrites a past estimate.
+
+    "voice_agent" is the one exception: the caller (e.g. ElevenLabs, via
+    `quantity`) already reports a final, real billed dollar amount that isn't
+    decomposable into per-stage token/character/minute counts, so there is no
+    price_book rate to look up -- storing it verbatim beats guessing at an
+    LLM-only or otherwise partial repricing. rate_id is None in this case."""
+    if stage == "voice_agent":
+        return _quantize(quantity), None
     rate = lookup.get_rate(provider=provider, model=model, billing_unit=billing_unit)
     if stage == "llm":
         cost = llm_cost(rate, input_tokens=input_tokens, cached_input_tokens=cached_input_tokens,
