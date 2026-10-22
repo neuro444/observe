@@ -68,15 +68,10 @@ ELEVENLABS_POLL_INTERVAL_SECONDS = int(os.getenv("ELEVENLABS_POLL_INTERVAL_SECON
 # distinct from COST_INGEST_SECRET, same reasoning as TELEPHONY_API_KEY above.
 ELEVENLABS_AGENT_API_KEY = os.getenv("ELEVENLABS_AGENT_API_KEY", "").strip()
 
-# Fixed monthly overhead — sum of all vendor platform subscriptions + server hosting.
-# FIXED_SERVER_COST_MONTHLY_USD          — VPS/cloud server (default $28.85/mo).
-# FIXED_ELEVENLABS_PLAN_MONTHLY_USD      — ElevenLabs Scale plan ($299/mo when active;
-#   zero by default — operators set this to their billed plan amount).
-# FIXED_TELEPHONY_NUMBERS_MONTHLY_USD    — DID phone-number rental per active number:
-#   Plivo +1-404-207-1333 (~$1.00/mo) + Twilio +1-571-716-2921 (~$1.15/mo) = $2.15/mo.
+# Phase 1, per the lead: keep this simple — a flat monthly constant, not a
+# fixed-costs table. Revisit if more than just the server needs tracking.
 FIXED_SERVER_COST_MONTHLY_USD = Decimal(os.getenv("FIXED_SERVER_COST_MONTHLY_USD", "28.85"))
 FIXED_ELEVENLABS_PLAN_MONTHLY_USD = Decimal(os.getenv("FIXED_ELEVENLABS_PLAN_MONTHLY_USD", "0.00"))
-FIXED_TELEPHONY_NUMBERS_MONTHLY_USD = Decimal(os.getenv("FIXED_TELEPHONY_NUMBERS_MONTHLY_USD", "2.15"))
 _lookup = PriceBookLookup(DATABASE_URL)
 _scheduler = BackgroundScheduler()
 
@@ -585,13 +580,12 @@ def _daily_fixed_cost(day: date) -> Decimal:
     denom = Decimal(days_in_month)
     server = FIXED_SERVER_COST_MONTHLY_USD / denom
     elevenlabs_plan = FIXED_ELEVENLABS_PLAN_MONTHLY_USD / denom
-    numbers = FIXED_TELEPHONY_NUMBERS_MONTHLY_USD / denom
-    return server + numbers, elevenlabs_plan
+    return server, elevenlabs_plan
 
 
 def _fixed_cost_for_range(period_start: date, num_days: int) -> tuple[Decimal, Decimal]:
     """Sums _daily_fixed_cost() across every real calendar day in the period.
-    Returns (server_and_numbers_cost, elevenlabs_plan_cost) as separate Decimals
+    Returns (server_cost, elevenlabs_plan_cost) as separate Decimals
     so callers can emit them as distinct columns in the API response."""
     server_total = Decimal("0")
     el_plan_total = Decimal("0")
