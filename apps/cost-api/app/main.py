@@ -361,10 +361,15 @@ async def list_calls(
         where.append("c.restaurant_id = %s")
         params.append(restaurant_id)
     if provider is not None:
-        where.append(
-            "EXISTS (SELECT 1 FROM usage_events ue WHERE ue.call_id = c.call_id AND ue.provider = %s)"
-        )
-        params.append(provider)
+        if provider == "llm":
+            where.append(
+                "EXISTS (SELECT 1 FROM usage_events ue WHERE ue.call_id = c.call_id AND (ue.stage = 'llm' OR ue.input_tokens > 0 OR ue.output_tokens > 0))"
+            )
+        else:
+            where.append(
+                "EXISTS (SELECT 1 FROM usage_events ue WHERE ue.call_id = c.call_id AND ue.provider = %s)"
+            )
+            params.append(provider)
     if start_date is not None:
         where.append("c.started_at >= %s")
         params.append(start_date)
@@ -633,6 +638,22 @@ async def costs_breakdown(
         cur.execute(
             f"""
             SELECT
+                date_trunc(%s, occurred_at)::date AS period,
+                COALESCE(SUM(input_tokens), 0) AS input_tokens,
+                COALESCE(SUM(cached_input_tokens), 0) AS cached_input_tokens,
+                COALESCE(SUM(output_tokens), 0) AS output_tokens,
+                COALESCE(SUM(calculated_cost_usd) FILTER (WHERE stage = 'llm' OR provider = 'openai'), 0) AS llm_cost_usd
+            FROM usage_events
+            WHERE restaurant_id = %s AND occurred_at >= %s AND occurred_at < %s
+            GROUP BY period
+            """,
+            (trunc_unit, restaurant_id, range_start, range_end_excl),
+        )
+        token_stats = {row["period"]: row for row in cur.fetchall()}
+
+        cur.execute(
+            f"""
+            SELECT
                 date_trunc(%s, c.started_at)::date AS period,
                 COUNT(*) AS call_count,
                 COALESCE(SUM(c.total_duration_s), 0) AS total_duration_s,
@@ -692,6 +713,12 @@ async def costs_breakdown(
         num_days = max((span_end_excl - span_start).days, 0)
         server_cost, el_plan_cost = _fixed_cost_for_range(span_start, num_days)
         total_fixed = server_cost + el_plan_cost
+        tok_data = token_stats.get(period, {})
+        in_tok = int(tok_data.get("input_tokens", 0))
+        cached_tok = int(tok_data.get("cached_input_tokens", 0))
+        out_tok = int(tok_data.get("output_tokens", 0))
+        tot_tok = in_tok + out_tok
+        llm_cost = Decimal(str(tok_data.get("llm_cost_usd", "0")))
         results.append({
             "period": period.isoformat(),
             "call_count": call_stats.get(period, {}).get("call_count", 0),
@@ -703,6 +730,11 @@ async def costs_breakdown(
             "fixed_cost_usd": str(server_cost),
             "fixed_elevenlabs_plan_usd": str(el_plan_cost),
             "total_cost_usd": str(variable_total + total_fixed),
+            "input_tokens": in_tok,
+            "cached_input_tokens": cached_tok,
+            "output_tokens": out_tok,
+            "total_tokens": tot_tok,
+            "llm_cost_usd": str(llm_cost),
         })
 
     total_cost = sum((Decimal(r["total_cost_usd"]) for r in results), Decimal("0"))
@@ -725,6 +757,11 @@ async def costs_breakdown(
             "plivo_cost_usd": str(sum((Decimal(r["plivo_cost_usd"]) for r in results), Decimal("0"))),
             "fixed_cost_usd": str(sum((Decimal(r["fixed_cost_usd"]) for r in results), Decimal("0"))),
             "fixed_elevenlabs_plan_usd": str(sum((Decimal(r["fixed_elevenlabs_plan_usd"]) for r in results), Decimal("0"))),
+            "input_tokens": sum(r["input_tokens"] for r in results),
+            "cached_input_tokens": sum(r["cached_input_tokens"] for r in results),
+            "output_tokens": sum(r["output_tokens"] for r in results),
+            "total_tokens": sum(r["total_tokens"] for r in results),
+            "llm_cost_usd": str(sum((Decimal(r["llm_cost_usd"]) for r in results), Decimal("0"))),
         },
     }
 
