@@ -71,6 +71,7 @@ ELEVENLABS_AGENT_API_KEY = os.getenv("ELEVENLABS_AGENT_API_KEY", "").strip()
 # Phase 1, per the lead: keep this simple — a flat monthly constant, not a
 # fixed-costs table. Revisit if more than just the server needs tracking.
 FIXED_SERVER_COST_MONTHLY_USD = Decimal(os.getenv("FIXED_SERVER_COST_MONTHLY_USD", "28.85"))
+FIXED_ELEVENLABS_PLAN_MONTHLY_USD = Decimal(os.getenv("FIXED_ELEVENLABS_PLAN_MONTHLY_USD", "0.00"))
 _lookup = PriceBookLookup(DATABASE_URL)
 _scheduler = BackgroundScheduler()
 
@@ -360,10 +361,15 @@ async def list_calls(
         where.append("c.restaurant_id = %s")
         params.append(restaurant_id)
     if provider is not None:
-        where.append(
-            "EXISTS (SELECT 1 FROM usage_events ue WHERE ue.call_id = c.call_id AND ue.provider = %s)"
-        )
-        params.append(provider)
+        if provider == "llm":
+            where.append(
+                "EXISTS (SELECT 1 FROM usage_events ue WHERE ue.call_id = c.call_id AND (ue.stage = 'llm' OR ue.input_tokens > 0 OR ue.output_tokens > 0))"
+            )
+        else:
+            where.append(
+                "EXISTS (SELECT 1 FROM usage_events ue WHERE ue.call_id = c.call_id AND ue.provider = %s)"
+            )
+            params.append(provider)
     if start_date is not None:
         where.append("c.started_at >= %s")
         params.append(start_date)
@@ -378,15 +384,17 @@ async def list_calls(
             f"""
             SELECT
                 c.call_id, c.restaurant_id, c.started_at, c.ended_at, c.status,
+                c.total_duration_s,
                 COALESCE(SUM(ue.calculated_cost_usd), 0) AS total_cost_usd,
                 COALESCE(SUM(ue.input_tokens), 0) AS total_input_tokens,
                 COALESCE(SUM(ue.output_tokens), 0) AS total_output_tokens,
+                COALESCE(SUM(ue.billable_minutes), 0) AS billed_minutes,
                 AVG(ue.latency_ms) FILTER (WHERE ue.latency_ms IS NOT NULL) AS avg_latency_ms,
                 ARRAY_AGG(DISTINCT ue.provider) FILTER (WHERE ue.provider IS NOT NULL) AS providers
             FROM calls c
             LEFT JOIN usage_events ue ON ue.call_id = c.call_id
             {where_clause}
-            GROUP BY c.call_id, c.restaurant_id, c.started_at, c.ended_at, c.status
+            GROUP BY c.call_id, c.restaurant_id, c.started_at, c.ended_at, c.status, c.total_duration_s
             ORDER BY c.started_at DESC
             LIMIT %s OFFSET %s
             """,
@@ -566,22 +574,31 @@ _BREAKDOWN_PROVIDERS = ("openai", "elevenlabs", "plivo")
 _TRUNC_UNIT = {"day": "day", "month": "month", "year": "year"}
 
 
-def _daily_fixed_cost(day: date) -> Decimal:
-    """Exactly daily_cost()'s proration: monthly cost / days in that day's
-    calendar month. Not a flat monthly/30 -- a 31-day month prorates lower
-    per day than a 28-day one, same as the per-day endpoint already does."""
+def _daily_fixed_cost(day: date) -> tuple[Decimal, Decimal]:
+    """Prorates each monthly fixed-cost constant to a single calendar day.
+    Uses the actual days in that month (not /30) so a 31-day month charges
+    fractionally less per day than a 28-day one.
+    Returns a tuple (server_cost, elevenlabs_plan_cost) so callers can
+    split the fixed column from the ElevenLabs plan column in responses."""
     days_in_month = calendar.monthrange(day.year, day.month)[1]
-    return FIXED_SERVER_COST_MONTHLY_USD / Decimal(days_in_month)
+    denom = Decimal(days_in_month)
+    server = FIXED_SERVER_COST_MONTHLY_USD / denom
+    elevenlabs_plan = FIXED_ELEVENLABS_PLAN_MONTHLY_USD / denom
+    return server, elevenlabs_plan
 
 
-def _fixed_cost_for_range(period_start: date, num_days: int) -> Decimal:
-    """Sums _daily_fixed_cost() across every real calendar day in the period,
-    so a bucket spanning a month boundary blends both months' per-day rates
-    instead of assuming a single flat rate for the whole span."""
-    total = Decimal("0")
+def _fixed_cost_for_range(period_start: date, num_days: int) -> tuple[Decimal, Decimal]:
+    """Sums _daily_fixed_cost() across every real calendar day in the period.
+    Returns (server_cost, elevenlabs_plan_cost) as separate Decimals
+    so callers can emit them as distinct columns in the API response."""
+    server_total = Decimal("0")
+    el_plan_total = Decimal("0")
     for offset in range(num_days):
-        total += _daily_fixed_cost(period_start + timedelta(days=offset))
-    return total.quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
+        server_day, el_day = _daily_fixed_cost(period_start + timedelta(days=offset))
+        server_total += server_day
+        el_plan_total += el_day
+    q = Decimal("0.000001")
+    return server_total.quantize(q, rounding=ROUND_HALF_UP), el_plan_total.quantize(q, rounding=ROUND_HALF_UP)
 
 
 @app.get("/internal/costs/breakdown")
@@ -619,14 +636,38 @@ async def costs_breakdown(
 
         cur.execute(
             f"""
-            SELECT date_trunc(%s, c.started_at)::date AS period, COUNT(*) AS call_count
+            SELECT
+                date_trunc(%s, occurred_at)::date AS period,
+                COALESCE(SUM(input_tokens), 0) AS input_tokens,
+                COALESCE(SUM(cached_input_tokens), 0) AS cached_input_tokens,
+                COALESCE(SUM(output_tokens), 0) AS output_tokens,
+                COALESCE(SUM(calculated_cost_usd) FILTER (WHERE stage = 'llm' OR input_tokens > 0 OR output_tokens > 0), 0) AS llm_cost_usd
+            FROM usage_events
+            WHERE restaurant_id = %s AND occurred_at >= %s AND occurred_at < %s
+            GROUP BY period
+            """,
+            (trunc_unit, restaurant_id, range_start, range_end_excl),
+        )
+        token_stats = {row["period"]: row for row in cur.fetchall()}
+
+        cur.execute(
+            f"""
+            SELECT
+                date_trunc(%s, c.started_at)::date AS period,
+                COUNT(*) AS call_count,
+                COALESCE(SUM(c.total_duration_s), 0) AS total_duration_s,
+                COALESCE(SUM(ue.billable_minutes), 0) AS billed_minutes
             FROM calls c
+            LEFT JOIN (
+                SELECT call_id, SUM(billable_minutes) AS billable_minutes
+                FROM usage_events GROUP BY call_id
+            ) ue ON ue.call_id = c.call_id
             WHERE c.restaurant_id = %s AND c.started_at >= %s AND c.started_at < %s
             GROUP BY period
             """,
             (trunc_unit, restaurant_id, range_start, range_end_excl),
         )
-        call_counts = {row["period"]: row["call_count"] for row in cur.fetchall()}
+        call_stats = {row["period"]: row for row in cur.fetchall()}
 
     def _bucket_start(day: date) -> date:
         if group_by == "day":
@@ -672,19 +713,36 @@ async def costs_breakdown(
         span_start = max(period, range_start)
         span_end_excl = min(_period_end_excl(period), range_end_excl)
         num_days = max((span_end_excl - span_start).days, 0)
-        fixed_cost = _fixed_cost_for_range(span_start, num_days)
+        server_cost, el_plan_cost = _fixed_cost_for_range(span_start, num_days)
+        total_fixed = server_cost + el_plan_cost
+        tok_data = token_stats.get(period, {})
+        in_tok = int(tok_data.get("input_tokens", 0))
+        cached_tok = int(tok_data.get("cached_input_tokens", 0))
+        out_tok = int(tok_data.get("output_tokens", 0))
+        tot_tok = in_tok + out_tok
+        llm_cost = Decimal(str(tok_data.get("llm_cost_usd", "0")))
         results.append({
             "period": period.isoformat(),
-            "call_count": call_counts.get(period, 0),
+            "call_count": call_stats.get(period, {}).get("call_count", 0),
+            "total_duration_s": str(call_stats.get(period, {}).get("total_duration_s", 0)),
+            "billed_minutes": str(call_stats.get(period, {}).get("billed_minutes", 0)),
             "openai_cost_usd": str(provider_costs["openai"]),
             "elevenlabs_cost_usd": str(provider_costs["elevenlabs"]),
             "plivo_cost_usd": str(provider_costs["plivo"]),
-            "fixed_cost_usd": str(fixed_cost),
-            "total_cost_usd": str(variable_total + fixed_cost),
+            "fixed_cost_usd": str(server_cost),
+            "fixed_elevenlabs_plan_usd": str(el_plan_cost),
+            "total_cost_usd": str(variable_total + total_fixed),
+            "variable_cost_usd": str(variable_total),
+            "input_tokens": in_tok,
+            "cached_input_tokens": cached_tok,
+            "output_tokens": out_tok,
+            "total_tokens": tot_tok,
+            "llm_cost_usd": str(llm_cost),
         })
 
     total_cost = sum((Decimal(r["total_cost_usd"]) for r in results), Decimal("0"))
     total_calls = sum((r["call_count"] for r in results), 0)
+    total_billed_minutes = sum((Decimal(r["billed_minutes"]) for r in results), Decimal("0"))
     avg_cost_per_call = (total_cost / total_calls) if total_calls else Decimal("0")
 
     return {
@@ -694,12 +752,20 @@ async def costs_breakdown(
         "periods": results,
         "summary": {
             "total_cost_usd": str(total_cost),
+            "variable_cost_usd": str(sum((Decimal(r["variable_cost_usd"]) for r in results), Decimal("0"))),
             "call_count": total_calls,
+            "total_billed_minutes": str(total_billed_minutes),
             "avg_cost_per_call_usd": str(avg_cost_per_call.quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)),
             "openai_cost_usd": str(sum((Decimal(r["openai_cost_usd"]) for r in results), Decimal("0"))),
             "elevenlabs_cost_usd": str(sum((Decimal(r["elevenlabs_cost_usd"]) for r in results), Decimal("0"))),
             "plivo_cost_usd": str(sum((Decimal(r["plivo_cost_usd"]) for r in results), Decimal("0"))),
             "fixed_cost_usd": str(sum((Decimal(r["fixed_cost_usd"]) for r in results), Decimal("0"))),
+            "fixed_elevenlabs_plan_usd": str(sum((Decimal(r["fixed_elevenlabs_plan_usd"]) for r in results), Decimal("0"))),
+            "input_tokens": sum(r["input_tokens"] for r in results),
+            "cached_input_tokens": sum(r["cached_input_tokens"] for r in results),
+            "output_tokens": sum(r["output_tokens"] for r in results),
+            "total_tokens": sum(r["total_tokens"] for r in results),
+            "llm_cost_usd": str(sum((Decimal(r["llm_cost_usd"]) for r in results), Decimal("0"))),
         },
     }
 
